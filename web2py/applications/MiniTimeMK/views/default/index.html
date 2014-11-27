@@ -3,6 +3,18 @@
 
 {{if 'message' in globals():}}
 <h3>{{=message}}</h3>
+<div>
+{{for entry in entries:}}
+{{=LI(A(_href=entry.page_url))}}
+{{=LI(entry.item_title)}}
+{{=LI(P(I(entry.item_description)))}}
+{{=LI(entry.item_image_url)}}
+{{=IMG(_src=entry.item_image_url)}}
+{{=LI(P(B(entry.item_content)))}}
+{{=BR()}}
+
+{{pass}}
+</div>
 
 <h4>{{=T('How did you get here?')}}</h4>
 <ol>
