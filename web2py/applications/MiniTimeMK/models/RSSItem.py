@@ -2,7 +2,7 @@ import re
 
 
 class RSSItem(object):
-    def __init__(self, page_url, category, item_title, item_content, item_description="", item_image_url=""):
+    def __init__(self, page_url, category, item_title, item_content, item_filtered_content, item_description="", item_image_url=""):
         """
         :param page_url: A string containing the page URL
         :param category: A string containing the page category
@@ -17,6 +17,7 @@ class RSSItem(object):
         self.category = category
         self.item_title = item_title
         self.item_content = item_content
+        self.item_filtered_content = item_filtered_content
         if item_description.strip() == "":
             self.item_description = self._get_item_description()
         else:
@@ -30,7 +31,10 @@ class RSSItem(object):
             a = re.findall(r"https?://.+?/", self.page_url)
             if len(a) > 0:
                 b = re.sub(r"\.?/?(.+)", r"\1", url)
-                ret = str(a[0]) + b
+                if url.startswith("."):
+                    ret = self.page_url + "/" + b
+                else:
+                    ret = str(a[0]) + b
                 return ret
             else:
                 return url

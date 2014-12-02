@@ -16,10 +16,57 @@ import urllib
 def get_html_soup(url):
     """Extracts the html of the page specified with url
     and returns a BeautifulSoup object"""
-    page_file = urllib.urlopen(url)
+    page_file = urllib.urlopen(url.encode("utf-8"))
     entry_html = page_file.read()
     page_file.close()
     return BeautifulSoup("".join(entry_html))
+
+
+def parse_item(feed_options_item):
+    d = feedparser.parse(feed_options_item.feed_url)
+
+    # Take only the first 2 elements for speed...debug purposes :)
+    for entry in d.entries[:2]:
+        soup = get_html_soup(entry.link)
+        #entry_html = urllib.urlopen(entry.link).read()
+        #soup = BeautifulSoup("".join(entry_html))
+        # print(soup.prettify(encoding="utf-8"))
+
+        item_description = ""
+        item_text = ""
+        image_url = ""
+
+        if feed_options_item.item_rss_description:
+            item_description = entry.description
+
+        if feed_options_item.content_from_rss:
+            item_text = entry[feed_options_item.content_rss_tag]
+        else:
+            content_entries = soup.select(feed_options_item.content_css_selector)
+            if len(content_entries) > 0:
+                item_text = content_entries[0].get_text()
+
+        if feed_options_item.image_from_rss:
+            image_url = entry[feed_options_item.image_rss_tag]
+        else:
+            image_entries = soup.select(feed_options_item.image_css_selector)
+            if len(image_entries) > 0:  # May not contain image
+                image_url = image_entries[0]["src"]
+
+        # Regex cleaning here
+        import re
+        item_filtered_text = item_text.lower().encode("utf-8")  # Encoding a string makes a special string
+        for (regex_expr, output_fmt) in feed_options_item.clean_regex:
+            item_filtered_text = re.sub(regex_expr, output_fmt, item_filtered_text)
+
+        rss_item = RSSItem(entry.link, feed_options_item.category,
+                           entry.title, item_text, item_filtered_text, item_description, image_url)
+        return rss_item
+
+
+def millis():
+    import time
+    return int(round(time.time() * 1000))
 
 
 def rss_extract_items(feeds_list):
@@ -32,39 +79,12 @@ def rss_extract_items(feeds_list):
     :return: A list of RSSItem items.
     """
     ret = []
+    t1 = millis()
     for feed_options_item in feeds_list:
-        d = feedparser.parse(feed_options_item.feed_url)
-
-        # Take only the first 2 elements for speed...debug purposes :)
-        for entry in d.entries[:2]:
-            soup = get_html_soup(entry.link)
-            # print(soup.prettify(encoding="utf-8"))
-
-            if feed_options_item.item_rss_description:
-                item_description = entry.description
-            else:
-                item_description = ""
-
-            if feed_options_item.content_from_rss:
-                item_text = entry[feed_options_item.content_rss_tag]
-            else:
-                content_entries = soup.select(feed_options_item.content_css_selector)
-                # if len(content_entries) > 0:
-                item_text = content_entries[0].get_text()
-
-            if feed_options_item.image_from_rss:
-                image_url = entry[feed_options_item.image_rss_tag]
-            else:
-                image_entries = soup.select(feed_options_item.image_css_selector)
-                if len(image_entries) > 0:  # May not contain image
-                    image_url = image_entries[0]["src"]
-
-            # TODO: Implement regex cleaning here
-
-            rss_item = RSSItem(entry.link, feed_options_item.category,
-                               entry.title, item_text, item_description, image_url)
-            ret.append(rss_item)
-
+        ret.append(parse_item(feed_options_item))
+    t2 = millis()
+    print(len(ret))
+    print("Sequential took %f millis", t2-t1)
     return ret
 
 
@@ -76,18 +96,28 @@ def index():
     if you need a simple wiki simply replace the two lines below with:
     return auth.wiki()
     """
-    #testf()
+    # Dynamically create a html page
+    # test_create()
+    # redirect(URL("index_generated"))
 
-    # feeds: A list of RSSFeedOptions items
+    # Selects zero or more occurrences of any interpunction sign in the set
+    interpunction_regex = r'(?:\s|[,."\':;!@#$%^&*()_<>/=+„“\-\\\|\[\]])' + '*'
+
+    # Selects every sequence of one or more latin or cyrillic, lowercase or uppercase letter and any number
+    word_regex = r'([A-Za-z0-9АБВГДЃЕЖЗЅИЈКЛЉМНЊОПРСТЌУФХЦЧЏШабвгдѓежзѕијклљмнњопрстќуфхцчџш]+)'
+
+    words_extraction_regex = [(interpunction_regex + word_regex + interpunction_regex, r'\1 ')]
+
     feeds = [RSSFeedOptions("http://kanal5.com.mk/rss/vestixml-makedonija.asp",
                             content_css_selector="div.entry div:nth-of-type(4)",
                             image_css_selector="div.entry div.frame_box img",
-                            category="makedonija"),
+                            category="makedonija",
+                            clean_regex=words_extraction_regex),
              RSSFeedOptions("http://www.plusinfo.mk/rss/zdravje",
                             content_css_selector="div.glavna_text",
                             image_css_selector="#MainContent_imgVest",
-                            category="zdravje")]
-    # (, "", [])]
+                            category="zdravje",
+                            clean_regex=words_extraction_regex)]
 
     ret = rss_extract_items(feeds)
 
@@ -95,6 +125,10 @@ def index():
     return dict(message=T('Hello WORLD'),
                 entries=ret
                 )
+
+
+def index_generated():
+    return dict(msg=T('HEY'))
 
 
 def user():
