@@ -21,12 +21,19 @@ def get_html_soup(url):
     page_file.close()
     return BeautifulSoup("".join(entry_html))
 
+def mysql(link, category, source, title, item_filtered_text, item_description, image_url):
+    db = DAL('mysql://root:@localhost/timemk')
+    db.define_table('posts', Field('link'), Field('category'), Field('source'), Field('title'), Field('text'), Field('description'), Field('imageurl'), fake_migrate=True)
+    db.posts.insert(link=link, category=category, source=source, title=title, text=item_filtered_text, description=item_description, imageurl=image_url)
 
 def parse_item(feed_options_item):
     d = feedparser.parse(feed_options_item.feed_url)
-
+    print(len(d))
     # Take only the first 2 elements for speed...debug purposes :)
-    for entry in d.entries[:2]:
+
+    ret = []
+    for entry in d.entries[:3]:
+
         soup = get_html_soup(entry.link)
         #entry_html = urllib.urlopen(entry.link).read()
         #soup = BeautifulSoup("".join(entry_html))
@@ -61,7 +68,12 @@ def parse_item(feed_options_item):
 
         rss_item = RSSItem(entry.link, feed_options_item.category,
                            entry.title, item_text, item_filtered_text, item_description, image_url)
-        return rss_item
+
+        #inserting into database
+        mysql(entry.link, feed_options_item.category, '1',
+              entry.title, item_filtered_text, item_description, image_url)
+        ret.append(rss_item)
+    return ret
 
 
 def millis():
@@ -81,7 +93,7 @@ def rss_extract_items(feeds_list):
     ret = []
     t1 = millis()
     for feed_options_item in feeds_list:
-        ret.append(parse_item(feed_options_item))
+        ret += (parse_item(feed_options_item))
     t2 = millis()
     print(len(ret))
     print("Sequential took %f millis", t2-t1)
@@ -108,19 +120,37 @@ def index():
 
     words_extraction_regex = [(interpunction_regex + word_regex + interpunction_regex, r'\1 ')]
 
+    # db = DAL('mysql://root:@localhost/timemk')
+    # db.define_table('rssfeeds', Field('source'), Field('category'), Field('feed'), fake_migrate=True)
+    # db.define_table('sources', Field('website'), Field('titleselector'), Field('contentselector'), Field('imageselector'), fake_migrate=True)
+    #
+    # feeds = []
+    # for row in db((db.sources.id==db.rssfeeds.source) & (db.rssfeeds.category == 1) & (db.rssfeeds.source == 1) | (db.rssfeeds.source == 4)).select(db.rssfeeds.ALL, db.sources.ALL):
+    #     feeds.append(RSSFeedOptions(row.rssfeeds.feed,
+    #                         content_css_selector=row.sources.contentselector,
+    #                         image_css_selector=row.sources.imageselector,
+    #                         category=row.rssfeeds.category,
+    #                         clean_regex=words_extraction_regex))
+
+
+
     feeds = [RSSFeedOptions("http://kanal5.com.mk/rss/vestixml-makedonija.asp",
                             content_css_selector="div.entry div:nth-of-type(4)",
                             image_css_selector="div.entry div.frame_box img",
-                            category="makedonija",
+                            category="1",
                             clean_regex=words_extraction_regex),
-             RSSFeedOptions("http://www.plusinfo.mk/rss/zdravje",
+             RSSFeedOptions("http://www.plusinfo.mk/rss/svet",
                             content_css_selector="div.glavna_text",
                             image_css_selector="#MainContent_imgVest",
-                            category="zdravje",
+                            category="5",
                             clean_regex=words_extraction_regex)]
 
     ret = rss_extract_items(feeds)
-
+    # db = DAL('mysql://root:@localhost/timemk')
+    # db.define_table('posts', Field('link'), Field('category'), Field('source'), Field('title'), Field('text'), Field('description'), Field('imageurl'), fake_migrate=True)
+    # db.define_table('rssfeeds', Field('source'), Field('category'), Field('feed'), fake_migrate=True)
+    # for row in db((db.posts.source==db.rssfeeds.source) & (db.posts.category==db.rssfeeds.category)).select(db.posts.ALL):
+    #     print row.title
     response.flash = T("Welcome to miniTimeMK")
     return dict(message=T('Hello WORLD'),
                 entries=ret
