@@ -40,4 +40,4 @@ class RSSItem(object):
                 return url
 
     def _get_item_description(self):
-        return self.item_content[0:min(len(self.item_content), 201)] + '...'
+        return self.item_content[0:min(len(self.item_content), 251)] + '...'

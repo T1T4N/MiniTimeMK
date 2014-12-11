@@ -21,16 +21,15 @@ def get_html_soup(url):
     page_file.close()
     return BeautifulSoup("".join(entry_html))
 
-def mysql(link, category, source, title, item_filtered_text, item_description, image_url):
-    db = DAL('mysql://root:@localhost/timemk')
-    db.define_table('posts', Field('link'), Field('category'), Field('source'), Field('title'), Field('text'), Field('description'), Field('imageurl'), fake_migrate=True)
+
+def insert_post(link, category, source, title, item_filtered_text, item_description, image_url):
     db.posts.insert(link=link, category=category, source=source, title=title, text=item_filtered_text, description=item_description, imageurl=image_url)
+
 
 def parse_item(feed_options_item):
     d = feedparser.parse(feed_options_item.feed_url)
-    print(len(d))
-    # Take only the first 2 elements for speed...debug purposes :)
 
+    # Take only the first 2 elements for speed...debug purposes :)
     ret = []
     for entry in d.entries[:3]:
 
@@ -69,9 +68,10 @@ def parse_item(feed_options_item):
         rss_item = RSSItem(entry.link, feed_options_item.category,
                            entry.title, item_text, item_filtered_text, item_description, image_url)
 
-        #inserting into database
-        mysql(entry.link, feed_options_item.category, '1',
-              entry.title, item_filtered_text, item_description, image_url)
+        #TODO: inserting into database
+        insert_post(entry.link, feed_options_item.category, '1',
+                    entry.title, item_filtered_text, item_description, image_url)
+
         ret.append(rss_item)
     return ret
 
@@ -113,17 +113,13 @@ def index():
     # redirect(URL("index_generated"))
 
     # Selects zero or more occurrences of any interpunction sign in the set
-    interpunction_regex = r'(?:\s|[,."\':;!@#$%^&*()_<>/=+„“\-\\\|\[\]])' + '*'
+    interpunction_regex = r'(?:\s|[,."\':;!@#$%^&*()_<>/=+„“–\-\\\|\[\]])' + '*'
 
     # Selects every sequence of one or more latin or cyrillic, lowercase or uppercase letter and any number
     word_regex = r'([A-Za-z0-9АБВГДЃЕЖЗЅИЈКЛЉМНЊОПРСТЌУФХЦЧЏШабвгдѓежзѕијклљмнњопрстќуфхцчџш]+)'
 
     words_extraction_regex = [(interpunction_regex + word_regex + interpunction_regex, r'\1 ')]
 
-    # db = DAL('mysql://root:@localhost/timemk')
-    # db.define_table('rssfeeds', Field('source'), Field('category'), Field('feed'), fake_migrate=True)
-    # db.define_table('sources', Field('website'), Field('titleselector'), Field('contentselector'), Field('imageselector'), fake_migrate=True)
-    #
     # feeds = []
     # for row in db((db.sources.id==db.rssfeeds.source) & (db.rssfeeds.category == 1) & (db.rssfeeds.source == 1) | (db.rssfeeds.source == 4)).select(db.rssfeeds.ALL, db.sources.ALL):
     #     feeds.append(RSSFeedOptions(row.rssfeeds.feed,
@@ -146,9 +142,7 @@ def index():
                             clean_regex=words_extraction_regex)]
 
     ret = rss_extract_items(feeds)
-    # db = DAL('mysql://root:@localhost/timemk')
-    # db.define_table('posts', Field('link'), Field('category'), Field('source'), Field('title'), Field('text'), Field('description'), Field('imageurl'), fake_migrate=True)
-    # db.define_table('rssfeeds', Field('source'), Field('category'), Field('feed'), fake_migrate=True)
+
     # for row in db((db.posts.source==db.rssfeeds.source) & (db.posts.category==db.rssfeeds.category)).select(db.posts.ALL):
     #     print row.title
     response.flash = T("Welcome to miniTimeMK")
