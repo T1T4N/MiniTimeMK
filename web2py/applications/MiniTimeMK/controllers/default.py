@@ -48,9 +48,13 @@ def parse_item(feed_options_item):
         if feed_options_item.content_from_rss:
             item_text = entry[feed_options_item.content_rss_tag]
         else:
-            content_entries = soup.select(feed_options_item.content_css_selector)
-            if len(content_entries) > 0:
-                item_text = content_entries[0].get_text()
+            selectors = feed_options_item.content_css_selector.split(",")
+            for selector in selectors:
+                content_entries = soup.select(selector)
+                if len(content_entries) > 0:
+                    for part in content_entries:
+                        item_text += part.get_text() + " "
+
 
         if feed_options_item.image_from_rss:
             image_url = entry[feed_options_item.image_rss_tag]
@@ -67,10 +71,13 @@ def parse_item(feed_options_item):
 
         rss_item = RSSItem(entry.link, feed_options_item.category,
                            entry.title, item_text, item_filtered_text, item_description, image_url)
+        print("tekst")
+        print(item_filtered_text)
+        print(image_url)
 
         #TODO: inserting into database
-        insert_post(entry.link, feed_options_item.category, '1',
-                    entry.title, item_filtered_text, item_description, image_url)
+        #insert_post(entry.link, feed_options_item.category, '1',
+                    #.title, item_filtered_text, item_description, image_url)
 
         ret.append(rss_item)
     return ret
@@ -130,16 +137,14 @@ def index():
 
 
 
-    feeds = [RSSFeedOptions("http://kanal5.com.mk/rss/vestixml-makedonija.asp",
-                            content_css_selector="div.entry div:nth-of-type(4)",
-                            image_css_selector="div.entry div.frame_box img",
+    feeds = [RSSFeedOptions("http://feeds.feedburner.com/kurir/makedonija",
+                            content_css_selector="#component div.article h2, #component div.article p",
+                            image_css_selector="#component div.article img",
                             category="1",
-                            clean_regex=words_extraction_regex),
-             RSSFeedOptions("http://www.plusinfo.mk/rss/svet",
-                            content_css_selector="div.glavna_text",
-                            image_css_selector="#MainContent_imgVest",
-                            category="5",
                             clean_regex=words_extraction_regex)]
+
+
+
 
     ret = rss_extract_items(feeds)
 
