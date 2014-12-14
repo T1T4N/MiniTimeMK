@@ -1,10 +1,11 @@
 
 class RSSFeedOptions(object):
-    def __init__(self, feed_url, content_from_rss=False, content_rss_tag=None, content_css_selector="",
+    def __init__(self, feed_url, source_id="", content_from_rss=False, content_rss_tag=None, content_css_selector="",
                  image_from_rss=False, image_rss_tag=None, image_css_selector="",
                  item_rss_description=False, category="None", clean_regex=[]):
         """
         :param feed_url: A string representation of the url to the feed
+        :param source_id: An id of the source in the database
         :param content_from_rss: A boolean flag which specifies whether the content should be taken
             from the RSS or from the HTML of the page. Default: False
         :param content_rss_tag: A string that specifies the RSS item tag for the content.
@@ -27,6 +28,7 @@ class RSSFeedOptions(object):
             output_fmt is the output format into which the matched content should be formatted
         """
         self.feed_url = feed_url
+        self.source_id = source_id
         self.content_from_rss = content_from_rss
         self.content_rss_tag = content_rss_tag
         self.content_css_selector = content_css_selector

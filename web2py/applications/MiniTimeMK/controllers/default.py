@@ -23,7 +23,11 @@ def get_html_soup(url):
 
 
 def insert_post(link, category, source, title, item_filtered_text, item_description, image_url):
-    db.posts.insert(link=link, category=category, source=source, title=title, text=item_filtered_text, description=item_description, imageurl=image_url)
+    rows = db(db.posts.link==link).select(db.posts.id)
+    if len(rows) == 0:
+        db.posts.insert(link=link, category=category, source=source, title=title, text=item_filtered_text, imageurl=image_url)
+        return True
+    return False
 
 
 def parse_item(feed_options_item):
@@ -31,7 +35,7 @@ def parse_item(feed_options_item):
 
     # Take only the first 2 elements for speed...debug purposes :)
     ret = []
-    for entry in d.entries[:3]:
+    for entry in d.entries:
 
         soup = get_html_soup(entry.link)
         #entry_html = urllib.urlopen(entry.link).read()
@@ -71,13 +75,12 @@ def parse_item(feed_options_item):
 
         rss_item = RSSItem(entry.link, feed_options_item.category,
                            entry.title, item_text, item_filtered_text, item_description, image_url)
-        print("tekst")
-        print(item_filtered_text)
-        print(image_url)
+
 
         #TODO: inserting into database
-        #insert_post(entry.link, feed_options_item.category, '1',
-                    #.title, item_filtered_text, item_description, image_url)
+        if not insert_post(entry.link, feed_options_item.category, feed_options_item.source_id,
+                    entry.title, item_filtered_text, item_description, image_url):
+            break
 
         ret.append(rss_item)
     return ret
@@ -127,21 +130,18 @@ def index():
 
     words_extraction_regex = [(interpunction_regex + word_regex + interpunction_regex, r'\1 ')]
 
-    # feeds = []
-    # for row in db((db.sources.id==db.rssfeeds.source) & (db.rssfeeds.category == 1) & (db.rssfeeds.source == 1) | (db.rssfeeds.source == 4)).select(db.rssfeeds.ALL, db.sources.ALL):
-    #     feeds.append(RSSFeedOptions(row.rssfeeds.feed,
-    #                         content_css_selector=row.sources.contentselector,
-    #                         image_css_selector=row.sources.imageselector,
-    #                         category=row.rssfeeds.category,
-    #                         clean_regex=words_extraction_regex))
+    feeds = []
+    rows = db(db.sources.id==db.rssfeeds.source).select(db.rssfeeds.ALL, db.sources.ALL)
+    for row in rows:
+        feeds.append(RSSFeedOptions(row.rssfeeds.feed, source_id=row.sources.id,
+                            content_css_selector=row.sources.contentselector,
+                            image_css_selector=row.sources.imageselector,
+                            category=row.rssfeeds.category,
+                            clean_regex=words_extraction_regex))
+        # print(row.rssfeeds.feed + " " + row.sources.contentselector + " " + row.sources.imageselector );
 
 
 
-    feeds = [RSSFeedOptions("http://feeds.feedburner.com/kurir/makedonija",
-                            content_css_selector="#component div.article h2, #component div.article p",
-                            image_css_selector="#component div.article img",
-                            category="1",
-                            clean_regex=words_extraction_regex)]
 
 
 
@@ -178,7 +178,7 @@ def user():
     return dict(form=auth())
 
 
-@cache.action()
+
 def download():
     """
     allows downloading of uploaded files
@@ -197,7 +197,7 @@ def call():
     return service()
 
 
-@auth.requires_login() 
+
 def api():
     """
     this is example of API with access control
