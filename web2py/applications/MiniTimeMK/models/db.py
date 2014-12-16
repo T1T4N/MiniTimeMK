@@ -15,7 +15,7 @@ if not request.env.web2py_runtime_gae:
     db = DAL('mysql://root:@localhost/timemk')
     db.define_table('rssfeeds', Field('source'), Field('category'), Field('feed')) #, fake_migrate=True)
     db.define_table('sources', Field('website'),  Field('contentFlag'),  Field('contentselector'),  Field('imageFlag'), Field('imageselector'))#, fake_migrate=True)
-    db.define_table('posts', Field('link'), Field('cluster'), Field('category'), Field('source'), Field('title'), Field('text'), Field('imageurl')) #, fake_migrate=True)
+    db.define_table('posts', Field('link'), Field('cluster'), Field('category'), Field('source'), Field('title'), Field('text'), Field('imageurl'), fake_migrate=True)
 else:
     ## connect to Google BigTable (optional 'google:datastore://namespace')
     db = DAL('google:datastore+ndb')

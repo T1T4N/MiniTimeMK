@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 import urllib
 
 
+
 def get_html_soup(url):
     """Extracts the html of the page specified with url
     and returns a BeautifulSoup object"""
@@ -23,11 +24,14 @@ def get_html_soup(url):
 
 
 def insert_post(link, category, source, title, item_filtered_text, item_description, image_url):
-    rows = db(db.posts.link==link).select(db.posts.id)
-    if len(rows) == 0:
-        db.posts.insert(link=link, category=category, source=source, title=title, text=item_filtered_text, imageurl=image_url)
-        return True
-    return False
+    post = Post(link, category, source, title, item_filtered_text, image_url)
+    return post.insertDatabase()
+    # rows = db(db.posts.link==link).select(db.posts.id)
+    # if len(rows) == 0:
+    #     print(link)
+    #     db.posts.insert(link=link, cluster=None, category=category, source=source, title=title, text=item_filtered_text, imageurl=image_url)
+    #     return True
+    # return False
 
 
 def parse_item(feed_options_item):
@@ -146,7 +150,11 @@ def index():
 
 
 
-    ret = rss_extract_items(feeds)
+    # ret = rss_extract_items(feeds)
+    ret = []
+    post = Post.getPost(39)
+    print(post.id)
+
 
     # for row in db((db.posts.source==db.rssfeeds.source) & (db.posts.category==db.rssfeeds.category)).select(db.posts.ALL):
     #     print row.title
