@@ -126,7 +126,7 @@ def index():
     # redirect(URL("index_generated"))
 
     # Selects zero or more occurrences of any interpunction sign in the set
-    interpunction_regex = r'(?:\s|[,."\':;!@#$%^&*()_<>/=+„“–\-\\\|\[\]])' + '*'
+    interpunction_regex = r'(?:\s|[,."\'`:;!@#$%^&*()_<>/=+„“–\-\\\|\[\]])' + '*'
 
     # Selects every sequence of one or more latin or cyrillic, lowercase or uppercase letter and any number
     word_regex = r'([A-Za-z0-9АБВГДЃЕЖЗЅИЈКЛЉМНЊОПРСТЌУФХЦЧЏШабвгдѓежзѕијклљмнњопрстќуфхцчџш]+)'
@@ -134,7 +134,7 @@ def index():
     words_extraction_regex = [(interpunction_regex + word_regex + interpunction_regex, r'\1 ')]
 
     feeds = []
-    rows = db(db.sources.id==db.rssfeeds.source).select(db.rssfeeds.ALL, db.sources.ALL)
+    rows = db(db.sources.id == db.rssfeeds.source).select(db.rssfeeds.ALL, db.sources.ALL)
     for row in rows:
         feeds.append(RSSFeedOptions(row.rssfeeds.feed, source_id=row.sources.id,
                             content_css_selector=row.sources.contentselector,
