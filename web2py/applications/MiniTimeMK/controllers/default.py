@@ -13,7 +13,6 @@ from bs4 import BeautifulSoup
 import urllib
 
 
-
 def get_html_soup(url):
     """Extracts the html of the page specified with url
     and returns a BeautifulSoup object"""
@@ -150,10 +149,10 @@ def index():
 
 
 
-    # ret = rss_extract_items(feeds)
-    ret = []
-    post = Post.getPost(39)
-    print(post.id)
+    ret = rss_extract_items(feeds)
+    # ret = []
+    # post = Post.getPost(39)
+    # print(post.id)
 
 
     # for row in db((db.posts.source==db.rssfeeds.source) & (db.posts.category==db.rssfeeds.category)).select(db.posts.ALL):
