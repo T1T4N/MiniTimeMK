@@ -23,11 +23,14 @@ def get_html_soup(url):
 
 
 def insert_post(link, category, source, title, item_filtered_text, item_description, image_url):
-    rows = db(db.posts.link==link).select(db.posts.id)
-    if len(rows) == 0:
-        db.posts.insert(link=link, category=category, source=source, title=title, text=item_filtered_text, imageurl=image_url)
-        return True
-    return False
+    post = Post(link, category, source, title, item_filtered_text, image_url)
+    return post.insertDatabase()
+    # rows = db(db.posts.link==link).select(db.posts.id)
+    # if len(rows) == 0:
+    #     print(link)
+    #     db.posts.insert(link=link, cluster=None, category=category, source=source, title=title, text=item_filtered_text, imageurl=image_url)
+    #     return True
+    # return False
 
 
 def parse_item(feed_options_item):
@@ -123,7 +126,7 @@ def index():
     # redirect(URL("index_generated"))
 
     # Selects zero or more occurrences of any interpunction sign in the set
-    interpunction_regex = r'(?:\s|[,."\':;!@#$%^&*()_<>/=+„“–\-\\\|\[\]])' + '*'
+    interpunction_regex = r'(?:\s|[,."\'`:;!@#$%^&*()_<>/=+„“–\-\\\|\[\]])' + '*'
 
     # Selects every sequence of one or more latin or cyrillic, lowercase or uppercase letter and any number
     word_regex = r'([A-Za-z0-9АБВГДЃЕЖЗЅИЈКЛЉМНЊОПРСТЌУФХЦЧЏШабвгдѓежзѕијклљмнњопрстќуфхцчџш]+)'
@@ -131,7 +134,7 @@ def index():
     words_extraction_regex = [(interpunction_regex + word_regex + interpunction_regex, r'\1 ')]
 
     feeds = []
-    rows = db(db.sources.id==db.rssfeeds.source).select(db.rssfeeds.ALL, db.sources.ALL)
+    rows = db(db.sources.id == db.rssfeeds.source).select(db.rssfeeds.ALL, db.sources.ALL)
     for row in rows:
         feeds.append(RSSFeedOptions(row.rssfeeds.feed, source_id=row.sources.id,
                             content_css_selector=row.sources.contentselector,
@@ -147,6 +150,10 @@ def index():
 
 
     ret = rss_extract_items(feeds)
+    # ret = []
+    # post = Post.getPost(39)
+    # print(post.id)
+
 
     # for row in db((db.posts.source==db.rssfeeds.source) & (db.posts.category==db.rssfeeds.category)).select(db.posts.ALL):
     #     print row.title

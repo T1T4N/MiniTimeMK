@@ -25,6 +25,7 @@ class RSSItem(object):
         self.item_image_url = self._compose_full_url(item_image_url)
 
     def _compose_full_url(self, url):
+        # TODO: (special case) Resolve real URL from Feedburner proxy
         if url.startswith("http"):
             return url
         else:
