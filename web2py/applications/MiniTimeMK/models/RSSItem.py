@@ -2,10 +2,11 @@ import re
 
 
 class RSSItem(object):
-    def __init__(self, page_url, category, item_title, item_content, item_filtered_content, item_description="", item_image_url=""):
+    def __init__(self, page_url, category, pub_date, item_title, item_content, item_filtered_content, item_description="", item_image_url=""):
         """
         :param page_url: A string containing the page URL
         :param category: A string containing the page category
+        :param pub_date: A string containing the published date
         :param item_title: A string containing the page title
         :param item_content: A string containing the clean page content
         :param item_description: A string containing the item description.
@@ -15,6 +16,7 @@ class RSSItem(object):
 
         self.page_url = page_url
         self.category = category
+        self.pub_date = pub_date
         self.item_title = item_title
         self.item_content = item_content
         self.item_filtered_content = item_filtered_content

@@ -5,8 +5,9 @@
 <h3>{{=message}}</h3>
 <div>
 {{for entry in entries:}}
-{{=LI(A(_href=entry.link))}}
 {{=LI(entry.title)}}
+{{=LI(entry.pubdate)}}
+{{=LI(A(_href=entry.link))}}
 {{=LI(P(I(entry.description)))}}
 {{=LI(entry.imageurl)}}
 {{=IMG(_src=entry.imageurl)}}

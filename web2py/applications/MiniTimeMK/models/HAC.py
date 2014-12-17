@@ -269,6 +269,7 @@ def hac(heap, vectors, score_pair, reverse_score_pair, docs_splitted):
                 # score = trunc(score, 12)
 
                 if score > 1.0:
+                    print 'Score bigger than 1: %f' % score
                     score = 1.0
                 if score > 0.6:
                     # print score, " : ", i, " ", K

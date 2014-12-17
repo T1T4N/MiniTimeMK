@@ -26,8 +26,8 @@ def get_html_soup(url):
     return BeautifulSoup("".join(entry_html))
 
 
-def insert_post(link, category, source, title, item_filtered_text, item_description, image_url):
-    post = Post(link, category, source, title, item_filtered_text, image_url)
+def insert_post(link, category, source, title, item_filtered_text, item_description, image_url, pubdate):
+    post = Post(link, category, source, title, item_filtered_text, image_url, pubdate)
     return post.insertDatabase()
     # rows = db(db.posts.link==link).select(db.posts.id)
     # if len(rows) == 0:
@@ -39,6 +39,7 @@ def insert_post(link, category, source, title, item_filtered_text, item_descript
 
 def parse_item(feed_options_item):
     d = feedparser.parse(feed_options_item.feed_url)
+    print 'Extracting feed: ', feed_options_item.feed_url
 
     ret = []
     for entry in d.entries:     # Take only the first 2 elements for speed...debug purposes :)
@@ -48,6 +49,7 @@ def parse_item(feed_options_item):
         item_description = ""
         item_text = ""
         image_url = ""
+        item_pub_date = entry.get("published", "Sat, 01 Jan 2000 07:58:55 +0000")   # default
 
         if feed_options_item.item_rss_description:
             item_description = entry.description
@@ -75,14 +77,16 @@ def parse_item(feed_options_item):
         for (regex_expr, output_fmt) in feed_options_item.clean_regex:
             item_filtered_text = re.sub(regex_expr, output_fmt, item_filtered_text)
 
-        rss_item = RSSItem(entry.link, feed_options_item.category,
+        rss_item = RSSItem(entry.link, feed_options_item.category, item_pub_date,
                            entry.title, item_text, item_filtered_text, item_description, image_url)
 
         if not insert_post(entry.link, feed_options_item.category,
-                           feed_options_item.source_id, entry.title,
-                           rss_item.item_filtered_content, rss_item.item_description, rss_item.item_image_url):
+                           feed_options_item.source_id, entry.title, rss_item.item_filtered_content,
+                           rss_item.item_description, rss_item.item_image_url, item_pub_date):
+            print 'Not inserted', entry.link
             break   # If post is already present in database, stop iterating the feed
 
+        # print rss_item.page_url, rss_item.category, rss_item.pub_date
         ret.append(rss_item)
     return ret
 
@@ -102,7 +106,7 @@ def rss_extract_items(feeds_list):
         ret += (parse_item(feed_options_item))
     t2 = millis()
     print(len(ret))
-    print("Sequential took %f millis", t2-t1)
+    print "Feeds processed in %d ms" % (t2-t1)
     return ret
 
 
@@ -129,22 +133,22 @@ def index():
     feeds = []
     rows = db(db.sources.id == db.rssfeeds.source).select(db.rssfeeds.ALL, db.sources.ALL)
     for row in rows:
+        print row.rssfeeds.feed, row.sources.id
         feeds.append(RSSFeedOptions(row.rssfeeds.feed, source_id=row.sources.id,
-                            content_css_selector=row.sources.contentselector,
-                            image_css_selector=row.sources.imageselector,
-                            category=row.rssfeeds.category,
-                            clean_regex=words_extraction_regex))
+                                    content_css_selector=row.sources.contentselector,
+                                    image_css_selector=row.sources.imageselector,
+                                    category=row.rssfeeds.category,
+                                    clean_regex=words_extraction_regex))
 
-    # clustering()
+    clustering()
 
     # ret = rss_extract_items(feeds)
-    # ret = []
     # post = Post.getPost(39)
     # print(post.id)
 
     response.flash = T("Welcome to miniTimeMK")
     return dict(message=T('Hello WORLD'),
-                entries=db((db.posts.source == db.rssfeeds.source) & (db.posts.category==db.rssfeeds.category)).select(db.posts.ALL)
+                entries=db((db.posts.source == db.rssfeeds.source) & (db.posts.category == db.rssfeeds.category)).select(db.posts.ALL)
                 )
 
 
