@@ -2,6 +2,8 @@ import collections
 import heapq
 import math
 import operator
+import re
+from decimal import Decimal
 
 __author__ = 'Daniel'
 
@@ -15,12 +17,25 @@ def get_all_posts():
         rows.append(text)
     return rows
 
-# delete from heap the element with value el
+# upotrebo ja deka treba, zabraviv ja
+def heap_remove_at_index_n(heap, n):
+    if n == len(heap)-1:
+        return heap.pop()
+    result = heap[n]
+    heap[n] = heap.pop()
+    heapq._siftup(heap, n)
+    return result
+
 def deleteFromHeap(heap, el):
-    index = heap.index(el*(-1))
-    heap[index] = heap[-1]
-    heap.pop()
-    heapq._siftup(heap, index)
+    index = heap.index(el * (-1))
+    if heap[index] == heap[-1]:
+        heap[index] = heap[-1]
+        heap.pop()
+        heapq.heapify(heap)
+    else:
+        heap[index] = heap[-1]
+        heap.pop()
+        heapq._siftup(heap, index)
 
 #returns the frequency of term in post
 def term_frequency(term, post):
@@ -91,17 +106,51 @@ def fillInitHeap(vectors, simVec, vecSim, heap):
             d1 = vectors[i]
             d2 = vectors[j]
             score = similar(d1, d2)
+            #score = trunc(score, 12)
+            if score > 1.0:
+                score = 1.0
             if score > 0.6:
+                print score," : ",i," ",j
                 #print i, '<->', j, ' ', score
                 simVec[score] = simVec.get(score, [])+[[i, j]]
                 vecSim[i] = vecSim.get(i, []) + [score]
                 vecSim[j] = vecSim.get(j, []) + [score]
                 heapq.heappush(heap, score*(-1))
 
+# return the largest value for similarity between two vectors
+def getBestSimilarity(simVec, vecSim, heap):
+    value = heapq.heappop(heap) * (-1)
+    resultVector = simVec[value].pop()
+    vecSim[resultVector[0]].remove(value)
+    vecSim[resultVector[1]].remove(value)
+    #tuka e smeneto. no logikata e ista
+    while (vecSim[resultVector[0]] != []):
+        el = vecSim[resultVector[0]].pop()
+        deleteFromHeap(heap, el)
+        pars = []
+        for par in simVec[el]:
+            if resultVector[0] in par:
+                simVec[el].remove(par)
+                pars = pars + par
+        for item in pars:
+            if item != resultVector[0]:
+                vecSim[item].remove(el)
+
+    while (vecSim[resultVector[1]] != []):
+        el = vecSim[resultVector[1]].pop()
+        deleteFromHeap(heap, el)
+        pars = []
+        for par in simVec[el]:
+            if resultVector[1] in par:
+                simVec[el].remove(par)
+                pars = pars + par
+        for item in pars:
+            if item != resultVector[1]:
+                vecSim[item].remove(el)
+    return resultVector
 
 #greska
 def hac(heap, vectors, simVec, vecSim, posts_splitted):
-    N = len(vectors)
     hashMerged = {}
     K = len(vectors)
     deleted = []
@@ -110,13 +159,16 @@ def hac(heap, vectors, simVec, vecSim, posts_splitted):
         deleted = deleted + resultVector
         newVector = merge_texts(posts_splitted[resultVector[0]], posts_splitted[resultVector[1]], posts_splitted)
         vectors.append(newVector)
-        for i in range(N):
+        for i in range(len(vectors)-1): #ovoa e smeneto
             if not i in deleted:
                 d1 = vectors[i]
                 score = similar(d1, newVector)
+                #score = trunc(score, 12)
+                if score > 1.0:
+                    score = 1.0
                 if score > 0.6:
-                    print i, '<->', resultVector[0],' ' , resultVector[1], ' ', score
-                    #TODO: TUKA E GRESKATA
+                    #print score," : ",i," ",K
+                    #print i, '<->', K, ' ', score
                     simVec[score] = simVec.get(score, [])+[[i, K]]
                     vecSim[i] = vecSim.get(i, []) + [score]
                     vecSim[K] = vecSim.get(K, []) + [score]
@@ -126,45 +178,9 @@ def hac(heap, vectors, simVec, vecSim, posts_splitted):
         K = K+1
     return hashMerged
 
-# return the largest value for similarity between two vectors
-def getBestSimilarity(simVec, vecSim, heap):
-    value = heapq.heappop(heap) * (-1)
-    #TODO: VO HAC e loguckata greska tuka dava index out of bound
-    resultVector = simVec[value].pop(0)
-
-    vecSim[resultVector[0]].remove(value)
-    vecSim[resultVector[1]].remove(value)
-
-    if vecSim[resultVector[0]] != []:
-        for el in vecSim[resultVector[0]]:
-            deleteFromHeap(heap, el)
-            vecSim[resultVector[0]].remove(el)
-            pars = []
-            for par in simVec[el]:
-                if resultVector[0] in par:
-                    simVec[el].remove(par)
-                    pars = pars + par
-            for item in pars:
-                if item != resultVector[0]:
-                    vecSim[item].remove(el)
-
-
-    if vecSim[resultVector[1]] != []:
-        for el in vecSim[resultVector[1]]:
-            deleteFromHeap(heap, el)
-            vecSim[resultVector[1]].remove(el)
-            pars = []
-            for par in simVec[el]:
-                if resultVector[1] in par:
-                    simVec[el].remove(par)
-                    pars = pars + par
-            for item in pars:
-                if item != resultVector[1]:
-                    vecSim[item].remove(el)
-    return resultVector
-
 #majka i tatko na site funkcii
-def clustering(posts):
+def clustering():
+    posts = get_all_posts()
     posts_splitted = []
     vectors = []
     simVec = {}
@@ -173,7 +189,7 @@ def clustering(posts):
     for post in posts:
         posts_splitted.append(post.split(' '))
     print 'posts splitted'
-    for i in range(400):
+    for i in range(len(posts_splitted)):
         print 'index: ', i
         vectors.append(tf_idf(posts_splitted[i], posts_splitted))
     print 'tf-idf finished'
