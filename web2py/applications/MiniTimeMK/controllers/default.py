@@ -27,7 +27,7 @@ def get_html_soup(url):
 
 
 def insert_post(link, category, source, title, item_filtered_text, item_description, image_url, pubdate):
-    post = Post(link, category, source, title, item_filtered_text, image_url, pubdate)
+    post = Post(link, category, source, title, item_filtered_text, item_description, image_url, pubdate)
     return post.insertDatabase()
     # rows = db(db.posts.link==link).select(db.posts.id)
     # if len(rows) == 0:
