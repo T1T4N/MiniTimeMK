@@ -14,8 +14,12 @@ import urllib
 
 
 def get_html_soup(url):
-    """Extracts the html of the page specified with url
-    and returns a BeautifulSoup object"""
+    """
+    Extracts the html of the page specified with url and returns a BeautifulSoup object.
+
+    :param url: The url of the page whose HTML should be extracted
+    :return: A BeautifulSoup object of the page HTML
+    """
     page_file = urllib.urlopen(url.encode("utf-8"))
     entry_html = page_file.read()
     page_file.close()
@@ -36,13 +40,9 @@ def insert_post(link, category, source, title, item_filtered_text, item_descript
 def parse_item(feed_options_item):
     d = feedparser.parse(feed_options_item.feed_url)
 
-    # Take only the first 2 elements for speed...debug purposes :)
     ret = []
-    for entry in d.entries:
-
+    for entry in d.entries:     # Take only the first 2 elements for speed...debug purposes :)
         soup = get_html_soup(entry.link)
-        #entry_html = urllib.urlopen(entry.link).read()
-        #soup = BeautifulSoup("".join(entry_html))
         # print(soup.prettify(encoding="utf-8"))
 
         item_description = ""
@@ -62,7 +62,6 @@ def parse_item(feed_options_item):
                     for part in content_entries:
                         item_text += part.get_text() + " "
 
-
         if feed_options_item.image_from_rss:
             image_url = entry[feed_options_item.image_rss_tag]
         else:
@@ -79,19 +78,13 @@ def parse_item(feed_options_item):
         rss_item = RSSItem(entry.link, feed_options_item.category,
                            entry.title, item_text, item_filtered_text, item_description, image_url)
 
-
-        #TODO: inserting into database
-        if not insert_post(entry.link, feed_options_item.category, feed_options_item.source_id,
-                    entry.title, item_filtered_text, item_description, image_url):
-            break
+        if not insert_post(entry.link, feed_options_item.category,
+                           feed_options_item.source_id, entry.title,
+                           rss_item.item_filtered_content, rss_item.item_description, rss_item.item_image_url):
+            break   # If post is already present in database, stop iterating the feed
 
         ret.append(rss_item)
     return ret
-
-
-def millis():
-    import time
-    return int(round(time.time() * 1000))
 
 
 def rss_extract_items(feeds_list):
@@ -141,25 +134,17 @@ def index():
                             image_css_selector=row.sources.imageselector,
                             category=row.rssfeeds.category,
                             clean_regex=words_extraction_regex))
-        # print(row.rssfeeds.feed + " " + row.sources.contentselector + " " + row.sources.imageselector );
 
+    # clustering()
 
-
-
-
-
-
-    ret = rss_extract_items(feeds)
+    # ret = rss_extract_items(feeds)
     # ret = []
     # post = Post.getPost(39)
     # print(post.id)
 
-
-    # for row in db((db.posts.source==db.rssfeeds.source) & (db.posts.category==db.rssfeeds.category)).select(db.posts.ALL):
-    #     print row.title
     response.flash = T("Welcome to miniTimeMK")
     return dict(message=T('Hello WORLD'),
-                entries=ret
+                entries=db((db.posts.source == db.rssfeeds.source) & (db.posts.category==db.rssfeeds.category)).select(db.posts.ALL)
                 )
 
 

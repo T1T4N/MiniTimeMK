@@ -5,13 +5,12 @@
 <h3>{{=message}}</h3>
 <div>
 {{for entry in entries:}}
-{{=LI(A(_href=entry.page_url))}}
-{{=LI(entry.item_title)}}
-{{=LI(P(I(entry.item_description)))}}
-{{=LI(entry.item_image_url)}}
-{{=IMG(_src=entry.item_image_url)}}
-{{=LI(P(B(entry.item_content)))}}
-{{=LI(P(B(entry.item_filtered_content)))}}
+{{=LI(A(_href=entry.link))}}
+{{=LI(entry.title)}}
+{{=LI(P(I(entry.description)))}}
+{{=LI(entry.imageurl)}}
+{{=IMG(_src=entry.imageurl)}}
+{{=LI(P(B(entry.text)))}}
 {{=BR()}}
 
 {{pass}}
