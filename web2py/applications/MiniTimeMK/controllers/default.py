@@ -10,41 +10,53 @@
 #########################################################################
 import feedparser
 from bs4 import BeautifulSoup
+from Queue import Queue
 import urllib
+import threading
 
 
-def get_html_soup(url):
+def get_html(entry, queue):
     """
-    Extracts the html of the page specified with url and returns a BeautifulSoup object.
+    Extracts the html of the page specified with url and puts it in a queue.
+    Intended for parallelized usage.
 
-    :param url: The url of the page whose HTML should be extracted
-    :return: A BeautifulSoup object of the page HTML
+    :param entry: The RSS Feed entry
+    :param queue: The queue where to store the result
     """
-    page_file = urllib.urlopen(url.encode("utf-8"))
+
+    page_file = urllib.urlopen(entry.link.encode("utf-8"))
     entry_html = page_file.read()
     page_file.close()
-    return BeautifulSoup("".join(entry_html))
+    queue.put((entry, "".join(entry_html)))
 
 
 def insert_post(link, category, source, title, item_filtered_text, item_description, image_url, pubdate):
     post = Post(link, category, source, title, item_filtered_text, item_description, image_url, pubdate)
-    return post.insertDatabase()
-    # rows = db(db.posts.link==link).select(db.posts.id)
-    # if len(rows) == 0:
-    #     print(link)
-    #     db.posts.insert(link=link, cluster=None, category=category, source=source, title=title, text=item_filtered_text, imageurl=image_url)
-    #     return True
-    # return False
+    return post.db_insert()
 
 
-def parse_item(feed_options_item):
+def parse_feed_parallel(feed_options_item):
+    """
+    Parallel creation of a RSSItem for each post in the feed.
+
+    :param feed_options_item: The RSS Feed options
+    :return: A list of RSSItems for each post
+    """
     d = feedparser.parse(feed_options_item.feed_url)
     print 'Extracting feed: ', feed_options_item.feed_url
 
-    ret = []
-    for entry in d.entries:     # Take only the first 2 elements for speed...debug purposes :)
-        soup = get_html_soup(entry.link)
-        # print(soup.prettify(encoding="utf-8"))
+    entries = Queue()   # Queue is thread-safe
+    # Create a thread for each entry in the feed
+    threads = [threading.Thread(target=get_html, args=(entry, entries)) for entry in d.entries]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    res = []
+    while not entries.empty():
+        (entry, html) = entries.get_nowait()
+        soup = BeautifulSoup(html)
 
         item_description = ""
         item_text = ""
@@ -83,12 +95,10 @@ def parse_item(feed_options_item):
         if not insert_post(entry.link, feed_options_item.category,
                            feed_options_item.source_id, entry.title, rss_item.item_filtered_content,
                            rss_item.item_description, rss_item.item_image_url, item_pub_date):
-            print 'Not inserted', entry.link
             break   # If post is already present in database, stop iterating the feed
 
-        # print rss_item.page_url, rss_item.category, rss_item.pub_date
-        ret.append(rss_item)
-    return ret
+        res.append(rss_item)
+    return res
 
 
 def rss_extract_items(feeds_list):
@@ -100,13 +110,27 @@ def rss_extract_items(feeds_list):
     :param feeds_list: A list of RSSFeedOptions items
     :return: A list of RSSItem items.
     """
+
     ret = []
+    print 'Parallel fetch started'
     t1 = millis()
     for feed_options_item in feeds_list:
-        ret += (parse_item(feed_options_item))
+        ret += (parse_feed_parallel(feed_options_item))
+    t2 = millis()
+    print "Number of posts: %d" % len(ret)
+    print "Parallel: feeds processed in %d ms" % (t2-t1)
+
+    """
+    ret = []
+    print 'Sequential fetch started'
+    t1 = millis()
+    for feed_options_item in feeds_list:
+        ret += (parse_feed_sequential(feed_options_item))
     t2 = millis()
     print(len(ret))
-    print "Feeds processed in %d ms" % (t2-t1)
+    print "Sequential: feeds processed in %d ms" % (t2-t1)
+    """
+
     return ret
 
 
@@ -133,16 +157,15 @@ def index():
     feeds = []
     rows = db(db.sources.id == db.rssfeeds.source).select(db.rssfeeds.ALL, db.sources.ALL)
     for row in rows:
-        print row.rssfeeds.feed, row.sources.id
         feeds.append(RSSFeedOptions(row.rssfeeds.feed, source_id=row.sources.id,
                                     content_css_selector=row.sources.contentselector,
                                     image_css_selector=row.sources.imageselector,
                                     category=row.rssfeeds.category,
                                     clean_regex=words_extraction_regex))
 
-    clustering()
+    # clustering()
 
-    # ret = rss_extract_items(feeds)
+    new_posts = rss_extract_items(feeds)
     # post = Post.getPost(39)
     # print(post.id)
 

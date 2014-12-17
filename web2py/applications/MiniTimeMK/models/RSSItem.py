@@ -27,6 +27,13 @@ class RSSItem(object):
         self.item_image_url = self._compose_full_url(item_image_url)
 
     def _compose_full_url(self, url):
+        """
+        Creates an absolute URL given a relative URL in the post.
+
+        :param url: The relative URL found in the post
+        :return: An absolute URL of the relative URL found in the post
+        """
+
         # TODO: (special case) Resolve real URL from Feedburner proxy
         if url.startswith("http"):
             return url
@@ -43,4 +50,10 @@ class RSSItem(object):
                 return url
 
     def _get_item_description(self):
+        """
+        Creates post description from the content.
+
+        :return: The first 250 characters from the post unfiltered content
+        """
+
         return self.item_content[0:min(len(self.item_content), 251)] + '...'
