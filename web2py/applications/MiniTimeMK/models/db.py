@@ -19,7 +19,7 @@ if not request.env.web2py_runtime_gae:
     db.define_table('categories', Field('category'), fake_migrate=True)
 
     # TODO: Change cluster definition
-    db.define_table('cluster', Field('keywords'), fake_migrate=True)
+    db.define_table('cluster', Field('score'), Field('keywords'), fake_migrate=True)
 else:
     ## connect to Google BigTable (optional 'google:datastore://namespace')
     db = DAL('google:datastore+ndb')
@@ -56,7 +56,7 @@ service = Service()
 plugins = PluginManager()
 
 ## create all tables needed by auth if not custom tables
-auth.define_tables(username=False, signature=False)
+auth.define_tables(username=False, signature=False, fake_migrate=True)
 
 ## configure email
 mail = auth.settings.mailer

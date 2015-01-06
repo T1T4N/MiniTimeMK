@@ -35,19 +35,24 @@ def insert_post(link, category, source, title, item_filtered_text, item_descript
     return post.db_insert()
 
 
-def parse_feed_parallel(feed_options_item):
+def parse_feed_parallel(feed_options_item, all_links):
     """
     Parallel creation of a RSSItem for each post in the feed.
 
     :param feed_options_item: The RSS Feed options
+    :param all_links: A set of all the links in the database
     :return: A list of RSSItems for each post
     """
+    default_date = "Sat, 01 Jan 2000 07:58:55 +0000"
     d = feedparser.parse(feed_options_item.feed_url)
     print 'Extracting feed: ', feed_options_item.feed_url
 
     entries = Queue()   # Queue is thread-safe
-    # Create a thread for each entry in the feed
-    threads = [threading.Thread(target=get_html, args=(entry, entries)) for entry in d.entries]
+
+    # Create a thread for each entry in the feed which is not present in the database
+    threads = [threading.Thread(target=get_html, args=(entry, entries))
+               for entry in d.entries if entry.link not in all_links]
+
     for t in threads:
         t.start()
     for t in threads:
@@ -61,7 +66,7 @@ def parse_feed_parallel(feed_options_item):
         item_description = ""
         item_text = ""
         image_url = ""
-        item_pub_date = entry.get("published", "Sat, 01 Jan 2000 07:58:55 +0000")   # default
+        item_pub_date = entry.get("published", default_date)   # default
 
         if feed_options_item.item_rss_description:
             item_description = entry.description
@@ -95,7 +100,7 @@ def parse_feed_parallel(feed_options_item):
         if not insert_post(entry.link, feed_options_item.category,
                            feed_options_item.source_id, entry.title, rss_item.item_filtered_content,
                            rss_item.item_description, rss_item.item_image_url, item_pub_date):
-            break   # If post is already present in database, stop iterating the feed
+            break   # If post is already present in database, stop
 
         res.append(rss_item)
     return res
@@ -111,11 +116,14 @@ def rss_extract_items(feeds_list):
     :return: A list of RSSItem items.
     """
 
+    all_dbrow_links = db().select(db.posts.link)    # List of Row objects containing the links
+    raw_links = set([row.link for row in all_dbrow_links])  # Set of strings containing the links
+
     ret = []
     print 'Parallel fetch started'
     t1 = millis()
     for feed_options_item in feeds_list:
-        ret += (parse_feed_parallel(feed_options_item))
+        ret += (parse_feed_parallel(feed_options_item, raw_links))
     t2 = millis()
     print "Number of posts: %d" % len(ret)
     print "Parallel: feeds processed in %d ms" % (t2-t1)
@@ -163,9 +171,8 @@ def index():
                                     category=row.rssfeeds.category,
                                     clean_regex=words_extraction_regex))
 
-    # clustering()
-
-    new_posts = rss_extract_items(feeds)
+    # new_posts = rss_extract_items(feeds)
+    clustering()
     # post = Post.getPost(39)
     # print(post.id)
 
