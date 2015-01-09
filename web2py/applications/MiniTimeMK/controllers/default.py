@@ -9,6 +9,7 @@
 ## - api is an example of Hypermedia API support and access control
 #########################################################################
 import feedparser
+from time import strftime
 from bs4 import BeautifulSoup
 from Queue import Queue
 import urllib
@@ -30,11 +31,6 @@ def get_html(entry, queue):
     queue.put((entry, "".join(entry_html)))
 
 
-def insert_post(link, category, source, title, item_filtered_text, item_description, image_url, pubdate):
-    post = Post(link, category, source, title, item_filtered_text, item_description, image_url, pubdate)
-    return post.db_insert()
-
-
 def parse_feed_parallel(feed_options_item, all_links):
     """
     Parallel creation of a RSSItem for each post in the feed.
@@ -43,13 +39,14 @@ def parse_feed_parallel(feed_options_item, all_links):
     :param all_links: A set of all the links in the database
     :return: A list of RSSItems for each post
     """
-    default_date = "Sat, 01 Jan 2000 07:58:55 +0000"
+    default_date = "2000-01-01 07:58:55"
     d = feedparser.parse(feed_options_item.feed_url)
     print 'Extracting feed: ', feed_options_item.feed_url
 
     entries = Queue()   # Queue is thread-safe
 
     # Create a thread for each entry in the feed which is not present in the database
+    # TODO: Limit number of threads to 5-10
     threads = [threading.Thread(target=get_html, args=(entry, entries))
                for entry in d.entries if entry.link not in all_links]
 
@@ -66,7 +63,14 @@ def parse_feed_parallel(feed_options_item, all_links):
         item_description = ""
         item_text = ""
         image_url = ""
+
         item_pub_date = entry.get("published", default_date)   # default
+        if item_pub_date != default_date:
+            if entry.published_parsed is None or entry.published_parsed == "":
+                item_pub_date = default_date
+            else:
+                # TODO: timezone adjustment
+                item_pub_date = strftime("%Y-%m-%d %H:%M:%S", entry.published_parsed)
 
         if feed_options_item.item_rss_description:
             item_description = entry.description
@@ -88,21 +92,28 @@ def parse_feed_parallel(feed_options_item, all_links):
             if len(image_entries) > 0:  # May not contain image
                 image_url = image_entries[0]["src"]
 
-        # Regex cleaning here
+        '''
+        Regex cleaning here
+        '''
         import re
         item_filtered_text = item_text.lower().encode("utf-8")  # Encoding a string makes a special string
         for (regex_expr, output_fmt) in feed_options_item.clean_regex:
             item_filtered_text = re.sub(regex_expr, output_fmt, item_filtered_text)
 
-        rss_item = RSSItem(entry.link, feed_options_item.category, item_pub_date,
-                           entry.title, item_text, item_filtered_text, item_description, image_url)
+        rss_post = RSSPost(page_url=entry.link,
+                           category=feed_options_item.category,
+                           source=feed_options_item.source_id,
+                           pub_date=item_pub_date,
+                           item_title=entry.title,
+                           item_content=item_text,
+                           item_filtered_content=item_filtered_text,
+                           item_description=item_description,
+                           item_image_url=image_url)
 
-        if not insert_post(entry.link, feed_options_item.category,
-                           feed_options_item.source_id, entry.title, rss_item.item_filtered_content,
-                           rss_item.item_description, rss_item.item_image_url, item_pub_date):
+        if not rss_post.db_insert():
             break   # If post is already present in database, stop
 
-        res.append(rss_item)
+        res.append(rss_post)
     return res
 
 
@@ -165,14 +176,15 @@ def index():
     feeds = []
     rows = db(db.sources.id == db.rssfeeds.source).select(db.rssfeeds.ALL, db.sources.ALL)
     for row in rows:
-        feeds.append(RSSFeedOptions(row.rssfeeds.feed, source_id=row.sources.id,
+        feeds.append(RSSFeedOptions(feed_url=row.rssfeeds.feed,
+                                    source_id=row.sources.id,
                                     content_css_selector=row.sources.contentselector,
                                     image_css_selector=row.sources.imageselector,
                                     category=row.rssfeeds.category,
                                     clean_regex=words_extraction_regex))
 
-    # new_posts = rss_extract_items(feeds)
-    clustering()
+    new_posts = rss_extract_items(feeds)
+    # clustering()
     # post = Post.getPost(39)
     # print(post.id)
 
