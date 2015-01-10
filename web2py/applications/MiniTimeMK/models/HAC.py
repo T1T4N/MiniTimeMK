@@ -145,7 +145,7 @@ def cosine_similarity(d1, d2):
     return 1.0 * upper_sum / (normalization_sum1 * normalization_sum2)
 
 
-def merge_texts(doc1, doc2, docs_splitted, words_sets):
+def merge_texts(vec_i, vec_j, doc1, doc2, docs_splitted, words_sets):
     """
     Merges the string contents of two documents, and calculates the top 12 keywords.
 
@@ -162,9 +162,31 @@ def merge_texts(doc1, doc2, docs_splitted, words_sets):
 
     merge_id = len(docs_splitted) - 1
 
-    # TODO: Can't we get the vector from the two seperate vectors ?
-    res = tf_idf(result, words_sets)
-    return merge_id, res
+    # This was the original implementation
+    # res = tf_idf(result, words_sets)
+
+    # WARNING: Experimental implementation below.
+    # Huge speedup for HAC.
+    rc = set([])
+    rc.update(vec_i.keys())
+    rc.update(vec_j.keys())
+
+    tokens = {}
+    for term in rc:
+        weight = term_frequency(term, result) * inverse_document_frequency(term, words_sets)
+        tokens[term] = weight
+
+    sorted_tokens = sorted(tokens.items(), key=lambda item: item[1], reverse=True)
+
+    ret = collections.defaultdict(lambda: 0)
+    if len(sorted_tokens) > 12:
+        for j in range(12):
+            term = sorted_tokens[j][0]
+            weight = sorted_tokens[j][1]
+            # print term, ' <-> ', weight
+            ret[term] = weight
+
+    return merge_id, ret
 
 
 def init_fill_heap(vectors, score_pair, reverse_score_pair, heap, threshold):
@@ -259,7 +281,7 @@ def hac(heap, vectors, score_pair, reverse_score_pair, docs_splitted, words_sets
         deleted.add(result_i)
         deleted.add(result_j)
 
-        merge_id, merged_vector = merge_texts(docs_splitted[result_i],
+        merge_id, merged_vector = merge_texts(vectors[result_i], vectors[result_j], docs_splitted[result_i],
                                               docs_splitted[result_j],
                                               docs_splitted, words_sets)
         vectors.append(merged_vector)
