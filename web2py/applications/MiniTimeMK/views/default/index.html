@@ -1,18 +1,16 @@
 {{extend 'layout.html'}}
-<div>
 {{for (cluster_id, (cluster_score, master_id, cluster_category, cluster_posts)) in entries:}}
-<li>Cluster ID: {{=cluster_id}}</li>
+<div>
+<li>Cluster ID: {{=cluster_id}}, Cluster size: {{=len(cluster_posts)}}</li>
 <li>Cluster score: {{=B(cluster_score)}}</li>
 <li>Cluster category: {{=B(db.categories[cluster_category].category)}}</li>
-{{=LI(A(db.posts[master_id].title, _href=db.posts[master_id].link))}}
+{{=A(IMG(_src=db.posts[master_id].imageurl, _width="120px", _height="120px"), _href=db.posts[master_id].imageurl)}} {{=A(db.posts[master_id].title, _href=db.posts[master_id].link)}}
 {{=LI(P(I(db.posts[master_id].description)))}}
-{{=LI(db.posts[master_id].imageurl)}}
-{{=IMG(_src=db.posts[master_id].imageurl)}}
-<h3>Cluster posts:</h3>
+<h4>Cluster posts:</h4>
 {{for post_id in cluster_posts:}}
 {{=LI(A(db.posts[post_id].title, _href=db.posts[post_id].link))}}
 {{pass}}
 {{=BR()}}
-{{=BR()}}
 </div>
+{{=BR()}}
 {{pass}}

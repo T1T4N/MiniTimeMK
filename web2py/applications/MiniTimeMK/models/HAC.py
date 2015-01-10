@@ -20,13 +20,13 @@ def get_all_posts():
     :return: List containing (post_id, post_text) tuples
     """
     rows = []
-    for row in db((db.posts.source == db.rssfeeds.source) & (db.posts.category == db.rssfeeds.category))\
-            .select(db.posts.ALL):  # , orderby=db.posts.id):
+    # Very important not to have duplicates in the select !
+    for row in db().select(db.posts.ALL):
         text = row.text
         text = re.sub('\n', ' ', text)
         text = re.sub('\s+', ' ', text)
         rows.append((row.id, text.strip()))
-        # print row.id, text.strip()
+        print row.id, text.strip()
     return rows
 
 
@@ -161,6 +161,8 @@ def merge_texts(doc1, doc2, docs_splitted, words_sets):
     words_sets.append(set(result))
 
     merge_id = len(docs_splitted) - 1
+
+    # TODO: Can't we get the vector from the two seperate vectors ?
     res = tf_idf(result, words_sets)
     return merge_id, res
 
@@ -309,14 +311,16 @@ def clustering():
 
     print 'Posts splitting started'
     t1 = millis()
-    for i, (post_id, post_text) in enumerate(docs[:limit]):
+    idx = 0
+    for (post_id, post_text) in docs[:limit]:
         post_words = post_text.split(' ')
         docs_splitted.append(post_words)
 
         docs_to_post_id[len(docs_splitted) - 1] = post_id
-        #print "Vector idx: ", i, \
-        #      "Post id: ", post_id, \
-        #      " : ", " ".join(post_words)
+        print "Vector idx: ", idx, \
+              "Post id: ", post_id, \
+              " : ", " ".join(post_words)
+        idx += 1
     t2 = millis()
     print 'Posts splitted in %d ms' % (t2 - t1)
 
@@ -391,11 +395,19 @@ def clustering():
                 master_id = post_id
 
         # Calculate cluster category
-        max_in_category = sorted(cluster_categories.values(), reverse=True)[0]
-        sorted_categories = sorted({key: db.categories[key].factor
-                                    for key in cluster_categories if cluster_categories[key] == max_in_category}.items(),
-                                   key=lambda x: (x[1], x[0]), reverse=True)
-        cluster_category = sorted_categories[0][0]
+        # Sort by value, and get first 2, then multiply by factor
+        sorted_categories = sorted(cluster_categories.items(), key=lambda x: x[1], reverse=True)
+        max_categories = sorted_categories[:min(2, len(sorted_categories))]
+        max_factor = -1
+        cluster_category = -1
+        for category, num_posts in max_categories:
+            factor = db.categories[category].factor * num_posts
+            if factor > max_factor:
+                max_factor = factor
+                cluster_category = category
+
+        if cluster_category == -1:
+            print "ERROR"
 
         # This gives a pretty big number, can be divided by 10,100 etc.
         cluster_score = (-1)*(current_time - min_epoch)*math.log(len(cluster_posts))
