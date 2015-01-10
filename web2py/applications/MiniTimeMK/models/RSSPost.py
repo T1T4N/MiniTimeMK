@@ -37,7 +37,9 @@ class RSSPost(object):
         :return: An absolute URL of the relative URL found in the post
         """
 
-        # TODO: (special case) Resolve real URL from Feedburner proxy
+        if len(url) == 0:
+            return ""
+
         if url.startswith("http"):
             return url
         else:

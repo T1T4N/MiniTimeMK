@@ -2,7 +2,7 @@
 class RSSFeedOptions(object):
     def __init__(self, feed_url, source_id="", content_from_rss=False, content_rss_tag=None, content_css_selector="",
                  image_from_rss=False, image_rss_tag=None, image_css_selector="",
-                 item_rss_description=False, category=None, clean_regex=[]):
+                 item_rss_description=False, category=None, recode=1, clean_regex=[]):
         """
         :param feed_url: A string representation of the url to the feed
         :param source_id: An id of the source in the database
@@ -21,6 +21,7 @@ class RSSFeedOptions(object):
         :param item_rss_description: A boolean flag specifying whether an item's description should be taken
             from the RSS "description" tag
         :param category: An integer specifying the feed's category
+        :param recode: A flag specifying whether the content text should be recoded in utf-8
         :param clean_regex: A list of regular expressions as raw strings that should be performed
             on the extracted content.
             Each item should be a tuple with format: (regex_expr, output_fmt)
@@ -38,3 +39,4 @@ class RSSFeedOptions(object):
         self.item_rss_description = item_rss_description
         self.category = category
         self.clean_regex = clean_regex
+        self.recode = True if recode == 1 else False

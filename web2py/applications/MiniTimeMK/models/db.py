@@ -17,7 +17,7 @@ if not request.env.web2py_runtime_gae:
     db.define_table('categories', Field('category'), Field('factor'), fake_migrate=True)
     db.define_table('posts', Field('link'), Field('cluster'), Field('category'), Field('source'), Field('title'),
                     Field('text'), Field('description'), Field('imageurl'), Field('pubdate'), fake_migrate=True)
-    db.define_table('rssfeeds', Field('source'), Field('category'), Field('feed'), fake_migrate=True)
+    db.define_table('rssfeeds', Field('source'), Field('category'), Field('feed'), Field("recode"), fake_migrate=True)
     db.define_table('sources', Field('website'),  Field('contentFlag'),  Field('contentselector'),
                     Field('imageFlag'), Field('imageselector'), fake_migrate=True)
     db.define_table('cluster', Field('score'), Field('master_post'), Field('category'), Field('size'), fake_migrate=True)

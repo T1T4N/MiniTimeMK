@@ -2,13 +2,14 @@ import collections
 import heapq
 import math
 import re
+import time
 
 
 def millis():
     """
     :return: A millisecond approximation of the current time
     """
-    import time
+
     return int(round(time.time() * 1000))
 
 
@@ -19,11 +20,13 @@ def get_all_posts():
     :return: List containing (post_id, post_text) tuples
     """
     rows = []
-    for row in db((db.posts.source == db.rssfeeds.source) & (db.posts.category == db.rssfeeds.category)).select(db.posts.ALL):
+    for row in db((db.posts.source == db.rssfeeds.source) & (db.posts.category == db.rssfeeds.category))\
+            .select(db.posts.ALL):  # , orderby=db.posts.id):
         text = row.text
         text = re.sub('\n', ' ', text)
         text = re.sub('\s+', ' ', text)
         rows.append((row.id, text.strip()))
+        # print row.id, text.strip()
     return rows
 
 
@@ -162,7 +165,7 @@ def merge_texts(doc1, doc2, docs_splitted, words_sets):
     return merge_id, res
 
 
-def init_fill_heap(vectors, score_pair, reverse_score_pair, heap):
+def init_fill_heap(vectors, score_pair, reverse_score_pair, heap, threshold):
     """
     Initial calculation of similarity for each pair of tf-idf vectors.
 
@@ -170,6 +173,7 @@ def init_fill_heap(vectors, score_pair, reverse_score_pair, heap):
     :param score_pair: An empty dictionary to be filled with score -> [(pair_i, pair_j), ...] pairs
     :param reverse_score_pair: A reverse dictionary of score_pair to be filled with (pair_i, pair_j) -> score pairs
     :param heap: An empty list to be used as a heap
+    :param threshold A decimal threshold above which clusters are merged
     :return: Fills score_pair, reverse_score_pair and heap with the corresponding data
     """
 
@@ -183,8 +187,8 @@ def init_fill_heap(vectors, score_pair, reverse_score_pair, heap):
             if score > 1.0:
                 score = 1.0
 
-            if score > 0.6:
-                print score, " : ", (i, j)
+            if score > threshold:
+                # print score, " : ", (i, j)
 
                 score_pair[score] = score_pair.get(score, [])
                 score_pair[score].append((i, j))
@@ -230,7 +234,7 @@ def get_most_similar(score_pair, reverse_score_pair, heap):
     return result_i, result_j
 
 
-def hac(heap, vectors, score_pair, reverse_score_pair, docs_splitted, words_sets, vector_id_map):
+def hac(heap, vectors, score_pair, reverse_score_pair, docs_splitted, words_sets, vector_id_map, threshold):
     """
     Performs Hierarchical Agglomerative Clustering on the given posts.
 
@@ -240,6 +244,8 @@ def hac(heap, vectors, score_pair, reverse_score_pair, docs_splitted, words_sets
     :param reverse_score_pair: A reverse dictionary of score_pair (simVec) containing pair : score key-value pairs
     :param docs_splitted: A list of the words of each post
     :param words_sets: A list of the set of words of each post
+    :param vector_id_map
+    :param threshold A decimal threshold above which clusters are merged
     :return: A dictionary containing cluster_id -> (id, id) pairs
     """
     hash_merged = {}
@@ -266,7 +272,7 @@ def hac(heap, vectors, score_pair, reverse_score_pair, docs_splitted, words_sets
                     print 'Score bigger than 1: %f' % score
                     score = 1.0
 
-                if score > 0.6:
+                if score > threshold:
                     # print score, " : ", i, " ", K
                     score_pair[score] = score_pair.get(score, [])
                     score_pair[score].append((i, k))
@@ -284,7 +290,8 @@ def clustering():
     """
     Main clustering function.
 
-    :return: A map with cluster_id : list_of_posts_ids key-value pairs
+    :return: A list of (cluster_id, cluster_score, master_id, cluster_category, cluster_posts)
+        sorted by cluster_score
     """
 
     docs = get_all_posts()  # A list of (post_id, text) tuples
@@ -298,6 +305,8 @@ def clustering():
     docs_to_post_id = {}    # A helper dictionary for mapping between relative docs_splitted indexes and post_id
 
     limit = len(docs)  # 600
+    threshold = 0.4
+
     print 'Posts splitting started'
     t1 = millis()
     for i, (post_id, post_text) in enumerate(docs[:limit]):
@@ -305,9 +314,9 @@ def clustering():
         docs_splitted.append(post_words)
 
         docs_to_post_id[len(docs_splitted) - 1] = post_id
-        print "Vector idx: ", i, \
-              "Post id: ", post_id, \
-              " : ", " ".join(post_words)
+        #print "Vector idx: ", i, \
+        #      "Post id: ", post_id, \
+        #      " : ", " ".join(post_words)
     t2 = millis()
     print 'Posts splitted in %d ms' % (t2 - t1)
 
@@ -329,16 +338,17 @@ def clustering():
 
     print 'Initial heap filling started'
     t1 = millis()
-    init_fill_heap(vectors, score_pair, reverse_score_pair, heap)
+    init_fill_heap(vectors, score_pair, reverse_score_pair, heap, threshold)
     t2 = millis()
     print 'Heap initially filled in %d ms' % (t2 - t1)
 
     print 'HAC started'
     t1 = millis()
-    result = hac(heap, vectors, score_pair, reverse_score_pair, docs_splitted, words_sets, vector_to_post_id)
+    result = hac(heap, vectors, score_pair, reverse_score_pair, docs_splitted, words_sets, vector_to_post_id, threshold)
     t2 = millis()
     print 'HAC finished in %d ms' % (t2 - t1)
 
+    # Creating a cluster-id -> [posts] dictionary
     eliminated = set([])
     final_dict = {}
     for key in sorted(result, reverse=True):
@@ -349,14 +359,69 @@ def clustering():
                 post_ids += get_children_clusters(result, c_id, eliminated)
         if post_ids:    # Skip empty arrays
             final_dict[key] = post_ids
-        print key, ' ', result[key]
+        # print key, ' ', result[key]
 
-    print 'DONE 1'
-
+    print 'Inserting clusters into database'
+    t1 = millis()
+    current_time = time.time()
+    last_id = -1
+    result = {}
     for key in sorted(final_dict, reverse=True):
-        # Posts in the cluster with their post_id from the db
-        final_postid = [int(vector_to_post_id[it]) for it in final_dict[key]]
-        print key, ' ', final_dict[key]     # Posts in the cluster with their vectors index
+        cluster_posts = []
+        cluster_categories = {}
+        min_epoch = time.time()
+        master_id = -1
+
+        # print key, ' ',
+        for it in final_dict[key]:  # final_dict[key] is a list of post_ids
+            post_id = int(vector_to_post_id[it])
+            cluster_posts.append(post_id)
+            # print 'V:', it, 'D:', post_id,
+
+            post_row = db.posts[post_id]
+            post_category = int(post_row.category)
+
+            # Count number of posts for each category
+            cluster_categories[post_category] = cluster_categories.get(post_category, 0) + 1
+
+            post_date = post_row.pubdate.timetuple()
+            post_epoch = time.mktime(post_date)
+            if post_epoch < min_epoch:  # The master-post is the oldest in the cluster
+                min_epoch = post_epoch
+                master_id = post_id
+
+        # Calculate cluster category
+        max_in_category = sorted(cluster_categories.values(), reverse=True)[0]
+        sorted_categories = sorted({key: db.categories[key].factor
+                                    for key in cluster_categories if cluster_categories[key] == max_in_category}.items(),
+                                   key=lambda x: (x[1], x[0]), reverse=True)
+        cluster_category = sorted_categories[0][0]
+
+        # This gives a pretty big number, can be divided by 10,100 etc.
+        cluster_score = (-1)*(current_time - min_epoch)*math.log(len(cluster_posts))
+
+        # Insert cluster into database
+        db.cluster.insert(score=cluster_score,
+                          master_post=master_id,
+                          category=cluster_category,
+                          size=len(cluster_posts))
+        if last_id == -1:   # Get next cluster_ids with one select
+            last_id = db().select(db.cluster.ALL).last().id
+
+        # Update cluster value, unavoidable
+        for post_id in cluster_posts:
+            db(db.posts.id == post_id).update(cluster=last_id)
+
+        result[last_id] = (cluster_score, master_id, cluster_category, cluster_posts)
+        # print
+        last_id += 1
+
+    t2 = millis()
+    print 'Inserting clusters finished in %d ms' % (t2 - t1)
+
+    # Return only the newly formed clusters, FOR DEBUG PURPOSES
+    # x[1] is the value, x[1][0] is the first element of the value: cluster_score
+    return sorted(result.items(), key=lambda x: x[1][0], reverse=True)
 
 
 def get_children_clusters(result_dict, key, eliminated):

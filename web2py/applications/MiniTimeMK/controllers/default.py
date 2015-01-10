@@ -31,6 +31,20 @@ def get_html(entry, queue):
     queue.put((entry, "".join(entry_html)))
 
 
+def get_encoding(soup):
+    ret = soup.meta.get('charset')
+    if ret is None:
+        ret = soup.meta.get('content-type')
+        if ret is None:
+            content = soup.meta.get('content')
+            match = re.search('charset=(.*)', content)
+            if match:
+                ret = match.group(1)
+            else:
+                ret = "utf-8"
+    return ret
+
+
 def parse_feed_parallel(feed_options_item, all_links):
     """
     Parallel creation of a RSSItem for each post in the feed.
@@ -40,15 +54,22 @@ def parse_feed_parallel(feed_options_item, all_links):
     :return: A list of RSSItems for each post
     """
     default_date = "2000-01-01 07:58:55"
+    default_encoding = "utf-8"
     d = feedparser.parse(feed_options_item.feed_url)
-    print 'Extracting feed: ', feed_options_item.feed_url
 
     entries = Queue()   # Queue is thread-safe
 
     # Create a thread for each entry in the feed which is not present in the database
     # TODO: Limit number of threads to 5-10
-    threads = [threading.Thread(target=get_html, args=(entry, entries))
-               for entry in d.entries if entry.link not in all_links]
+    threads = []
+
+    for entry in d.entries:
+        if 'feedproxy.google' in entry.link:    # Feedproxy workaround
+            if entry.get("feedburner_origlink", entry.link) not in all_links:
+                threads.append(threading.Thread(target=get_html, args=(entry, entries)))
+        else:
+            if entry.link not in all_links:
+                threads.append(threading.Thread(target=get_html, args=(entry, entries)))
 
     for t in threads:
         t.start()
@@ -64,6 +85,10 @@ def parse_feed_parallel(feed_options_item, all_links):
         item_text = ""
         image_url = ""
 
+        item_link = entry.link
+        if 'feedproxy.google' in item_link:     # Feedproxy workaround
+            item_link = entry.get("feedburner_origlink", item_link)
+
         item_pub_date = entry.get("published", default_date)   # default
         if item_pub_date != default_date:
             if entry.published_parsed is None or entry.published_parsed == "":
@@ -71,6 +96,10 @@ def parse_feed_parallel(feed_options_item, all_links):
             else:
                 # TODO: timezone adjustment
                 item_pub_date = strftime("%Y-%m-%d %H:%M:%S", entry.published_parsed)
+
+        # TODO: Workaround for Kanal5 missing publish date
+        if feed_options_item.source_id == 1:
+            pass
 
         if feed_options_item.item_rss_description:
             item_description = entry.description
@@ -85,6 +114,10 @@ def parse_feed_parallel(feed_options_item, all_links):
                     for part in content_entries:
                         item_text += part.get_text() + " "
 
+            if feed_options_item.recode:
+                item_text = item_text.encode(soup.original_encoding, errors='ignore')
+                item_text = item_text.decode(default_encoding, errors='ignore')
+
         if feed_options_item.image_from_rss:
             image_url = entry[feed_options_item.image_rss_tag]
         else:
@@ -96,11 +129,11 @@ def parse_feed_parallel(feed_options_item, all_links):
         Regex cleaning here
         '''
         import re
-        item_filtered_text = item_text.lower().encode("utf-8")  # Encoding a string makes a special string
+        item_filtered_text = item_text.lower()
         for (regex_expr, output_fmt) in feed_options_item.clean_regex:
             item_filtered_text = re.sub(regex_expr, output_fmt, item_filtered_text)
 
-        rss_post = RSSPost(page_url=entry.link,
+        rss_post = RSSPost(page_url=item_link,
                            category=feed_options_item.category,
                            source=feed_options_item.source_id,
                            pub_date=item_pub_date,
@@ -131,9 +164,10 @@ def rss_extract_items(feeds_list):
     raw_links = set([row.link for row in all_dbrow_links])  # Set of strings containing the links
 
     ret = []
-    print 'Parallel fetch started'
+    print 'Parallel fetch started', len(feeds_list), 'feeds'
     t1 = millis()
-    for feed_options_item in feeds_list:
+    for i, feed_options_item in enumerate(feeds_list):
+        # print 'Extracting feed: ', feed_options_item.feed_url
         ret += (parse_feed_parallel(feed_options_item, raw_links))
     t2 = millis()
     print "Number of posts: %d" % len(ret)
@@ -166,10 +200,10 @@ def index():
     # redirect(URL("index_generated"))
 
     # Selects zero or more occurrences of any interpunction sign in the set
-    interpunction_regex = r'(?:\s|[,."\'`:;!@#$%^&*()_<>/=+„“–\-\\\|\[\]])' + '*'
+    interpunction_regex = u'(?:\s|[,."\'`:;!@#$%^&*()_<>/=+„“”–\-\\\|\[\]])' + u'*'
 
     # Selects every sequence of one or more latin or cyrillic, lowercase or uppercase letter and any number
-    word_regex = r'([A-Za-z0-9АБВГДЃЕЖЗЅИЈКЛЉМНЊОПРСТЌУФХЦЧЏШабвгдѓежзѕијклљмнњопрстќуфхцчџш]+)'
+    word_regex = u'([A-Za-z0-9АБВГДЃЕЖЗЅИЈКЛЉМНЊОПРСТЌУФХЦЧЏШабвгдѓежзѕијклљмнњопрстќуфхцчџш]+)'
 
     words_extraction_regex = [(interpunction_regex + word_regex + interpunction_regex, r'\1 ')]
 
@@ -181,16 +215,15 @@ def index():
                                     content_css_selector=row.sources.contentselector,
                                     image_css_selector=row.sources.imageselector,
                                     category=row.rssfeeds.category,
+                                    recode=row.rssfeeds.recode,
                                     clean_regex=words_extraction_regex))
 
     new_posts = rss_extract_items(feeds)
-    # clustering()
-    # post = Post.getPost(39)
-    # print(post.id)
+    new_clusters = clustering()
 
     response.flash = T("Welcome to miniTimeMK")
     return dict(message=T('Hello WORLD'),
-                entries=db((db.posts.source == db.rssfeeds.source) & (db.posts.category == db.rssfeeds.category)).select(db.posts.ALL)
+                entries=new_clusters
                 )
 
 
