@@ -6,7 +6,7 @@
 <li>Cluster category: {{=B(db.categories[cluster_category].category)}}</li>
 {{=A(IMG(_src=db.posts[master_id].imageurl, _width="120px", _height="120px"), _href=db.posts[master_id].imageurl)}} {{=A(db.posts[master_id].title, _href=db.posts[master_id].link)}}
 {{=LI(P(I(db.posts[master_id].description)))}}
-<h4>Cluster posts:</h4>
+<h5>Cluster posts:</h5>
 {{for post_id in cluster_posts:}}
 {{=LI(A(db.posts[post_id].title, _href=db.posts[post_id].link))}}
 {{pass}}

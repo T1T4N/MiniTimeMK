@@ -406,11 +406,13 @@ def clustering():
                 max_factor = factor
                 cluster_category = category
 
-        if cluster_category == -1:
-            print "ERROR"
+        if cluster_category == -1:  # DEBUG purpose
+            print "ERROR: Cluster has no category or posts"
 
-        # This gives a pretty big number, can be divided by 10,100 etc.
-        cluster_score = (-1)*(current_time - min_epoch)*math.log(len(cluster_posts))
+        # This gives the difference in seconds, a pretty big number.
+        # Divided by 3600 to get hours, because 2 hours = 7200 seconds
+        # and exp(-7200) ~ 0.0, and we need a valid metric for more than 2 hours
+        cluster_score = math.exp(-(current_time - min_epoch)/(60*60))*math.log(len(cluster_posts))
 
         # Insert cluster into database
         db.cluster.insert(score=cluster_score,
