@@ -231,6 +231,37 @@ def index_generated():
     return dict(msg=T('HEY'))
 
 
+def startpage():
+    categories = db().select(db.categories.ALL)
+
+    categoryentries = []
+    clusterEntries = {}
+    postEntries = {}
+
+    for category in categories:
+        categoryentries.append((category.id, category.category))
+        clusters = db(category.id == db.cluster.category).select(db.cluster.ALL, orderby=~db.cluster.score)
+        print("Category " + str(category.id))
+        for cluster in clusters[:3]:
+            tempCluster = clusterEntries.get(category.id, [])
+            tempCluster.append(cluster.id)
+            clusterEntries[category.id] = tempCluster
+
+            print("cluster " + str(cluster.id))
+            posts = db(cluster.id == db.posts.cluster).select(db.posts.ALL, orderby=db.posts.id)
+            for post in posts[:5]:
+                tempPosts = postEntries.get(cluster.id, [])
+                tempPosts.append([post.id, post.title, post.imageurl, post.description, post.link])
+                postEntries[cluster.id] = tempPosts
+                print ("post " + str(post.id))
+
+    return dict(message=T('Hello WORLD'),
+                categoryentries=categoryentries,
+                clusterEntries=clusterEntries,
+                postEntries=postEntries
+                )
+
+
 def user():
     """
     exposes:
