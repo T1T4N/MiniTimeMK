@@ -328,7 +328,7 @@ def clustering():
     vector_to_post_id = {}  # A helper dictionary for mapping between relative vector indexes and post_id
     docs_to_post_id = {}    # A helper dictionary for mapping between relative docs_splitted indexes and post_id
 
-    limit = len(docs)  # 600
+    limit = 200 #len(docs)  # 600
     threshold = 0.4
 
     print 'Posts splitting started'
@@ -434,7 +434,20 @@ def clustering():
         # This gives the difference in seconds, a pretty big number.
         # Divided by 3600 to get hours, because 2 hours = 7200 seconds
         # and exp(-7200) ~ 0.0, and we need a valid metric for more than 2 hours
-        cluster_score = math.exp(-(current_time - min_epoch)/(60*60))*math.log(len(cluster_posts))
+        #cluster_score = math.exp(-(current_time - min_epoch)/(60*60))*math.log(len(cluster_posts))
+
+        #alpha e faktor moze da se menuva i spored nego kje se gleda kolku vlijae starosta
+        alpha = 1
+        time_now = time.time()
+        sum = 0
+        for post_id in cluster_posts:
+            t = time.mktime(db.posts[post_id].pubdate.timetuple())
+            c = math.exp(-(time_now - t) / 60 / 60)
+            sum += c
+
+        average = alpha * sum / len(cluster_posts)
+
+        cluster_score = average * math.log(len(cluster_posts))
 
         # Insert cluster into database
         db.cluster.insert(score=cluster_score,
