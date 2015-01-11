@@ -10,7 +10,6 @@
 #########################################################################
 import feedparser
 from time import strftime
-from datetime import datetime
 from bs4 import BeautifulSoup
 from Queue import Queue
 import urllib
@@ -174,17 +173,6 @@ def rss_extract_items(feeds_list):
     print "Number of posts: %d" % len(ret)
     print "Parallel: feeds processed in %d ms" % (t2-t1)
 
-    """
-    ret = []
-    print 'Sequential fetch started'
-    t1 = millis()
-    for feed_options_item in feeds_list:
-        ret += (parse_feed_sequential(feed_options_item))
-    t2 = millis()
-    print(len(ret))
-    print "Sequential: feeds processed in %d ms" % (t2-t1)
-    """
-
     return ret
 
 
@@ -196,9 +184,6 @@ def index():
     if you need a simple wiki simply replace the two lines below with:
     return auth.wiki()
     """
-    # Dynamically create a html page
-    # test_create()
-    # redirect(URL("index_generated"))
 
     # Selects zero or more occurrences of any interpunction sign in the set
     interpunction_regex = u'(?:\s|[,."\'`:;!@#$%^&*()_<>/=+„“”–\-\\\|\[\]])' + u'*'
@@ -220,84 +205,49 @@ def index():
                                     clean_regex=words_extraction_regex))
 
     # new_posts = rss_extract_items(feeds)
-    new_clusters = clustering()
+    # new_clusters = clustering()
+    generate_static()
 
-    response.flash = T("Welcome to miniTimeMK")
-    return dict(message=T('Hello WORLD'),
-                entries=new_clusters
+    redirect('startpage')
+    return dict(
+                # entries=new_clusters
                 )
 
 
-def index_generated():
-    return dict(msg=T('HEY'))
-
-
-def days_between(days):
-    #convertes days to weeks/months/years
-    if days >= 365:
-        return str(int(days/365)) + " год"
-    if days >= 30:
-        return str(int(days/30)) + " мес"
-    if days >= 7:
-        return str(int(days/7)) + " нед"
-    if days == 1:
-        return str(days) + " ден"
-    return str(days) + " дена"
-
-def hours_ago(mins):
-    #convertes minutes to hours
-    if mins >= 60:
-        hours = int(mins/60)
-        if hours == 1:
-            return "1 час"
-        else:
-            return str(hours) + " часа"
-    else:
-        return str(mins) + " мин"
-
-def time_between(d1, d2):
-    #calculates difference between two date
-    #d1 > d2
-    d1 = datetime.strptime(d1, "%Y-%m-%d %H:%M:%S")
-    d2 = datetime.strptime(d2, "%Y-%m-%d %H:%M:%S")
-    days = (d1 - d2).days
-    if days > 0:
-        return str(days_between(days))
-    else:
-        minutes = int((d1-d2).total_seconds())
-        return hours_ago(minutes)
+def index_static():
+    return dict()
 
 
 def startpage():
-    categories = db().select(db.categories.ALL)
+    all_categories = db().select(db.categories.ALL)
 
-    categoryentries = []
-    clusterEntries = {}
-    postEntries = {}
+    category_entries = []
+    cluster_entries = {}
+    post_entries = {}
 
-    for category in categories:
-        categoryentries.append((category.id, category.category))
+    for category in all_categories:
+        category_entries.append((category.id, category.category))
         clusters = db(category.id == db.cluster.category).select(db.cluster.ALL, orderby=~db.cluster.score)
         print("Category " + str(category.id))
+
         for cluster in clusters[:3]:
-            tempCluster = clusterEntries.get(category.id, [])
-            tempCluster.append(cluster.id)
-            clusterEntries[category.id] = tempCluster
+            temp_cluster = cluster_entries.get(category.id, [])
+            temp_cluster.append(cluster.id)
+            cluster_entries[category.id] = temp_cluster
             print("cluster " + str(cluster.id))
-            posts = db((cluster.id == db.posts.cluster) & (db.posts.source == db.sources.id)).select(db.posts.ALL,
-                                                                                db.sources.website, orderby=db.posts.id)
+            posts = db((cluster.id == db.posts.cluster) &
+                       (db.posts.source == db.sources.id)).select(db.posts.ALL, db.sources.website, orderby=db.posts.id)
             for post in posts[:9]:
-                tempPosts = postEntries.get(cluster.id, [])
-                timeAgo = "пред " + time_between(str(time.strftime("%Y-%m-%d %H:%M:%S")), str(post.posts.pubdate))
-                tempPosts.append([post.posts.id, post.posts.title, post.posts.imageurl,
-                                  post.posts.description, post.posts.link, timeAgo, post.sources.website])
-                postEntries[cluster.id] = tempPosts
+                temp_posts = post_entries.get(cluster.id, [])
+                time_ago = "пред " + time_between(str(time.strftime("%Y-%m-%d %H:%M:%S")), str(post.posts.pubdate))
+                temp_posts.append([post.posts.id, post.posts.title, post.posts.imageurl,
+                                  post.posts.description, post.posts.link, time_ago, post.sources.website])
+                post_entries[cluster.id] = temp_posts
                 print ("post " + str(post.posts.id))
 
-    return dict(message=T('Hello WORLD'),
-                categoryentries=categoryentries,
-                clusterEntries=clusterEntries,
-                postEntries=postEntries
+    return dict(categoryentries=category_entries,
+                clusterEntries=cluster_entries,
+                postEntries=post_entries
                 )
 
 

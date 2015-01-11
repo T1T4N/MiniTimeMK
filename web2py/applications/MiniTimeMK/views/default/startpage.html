@@ -1,45 +1,39 @@
 {{extend 'layout1.html'}}
 
 {{for (id, category) in categoryentries:}}
-<div class="category">
+    <div class="category">
 	<h3>{{=category}}</h3>
-
     {{arr = clusterEntries.get(id)}}
 
-    {{if not arr == None:}}
-    {{for cl in arr:}}
-        {{posts = postEntries.get(cl)}}
-        {{if not posts == None:}}
-        {{first = True}}
-            <div>
-            {{for (postId, title, image, description, link, published, website) in posts:}}
-                {{if first:}}
-                <article>
-				<a href="{{=link}}" target="_blank"><img src="{{=image}}" /></a>
-				<a href="{{=link}}" target="_blank"><h4>{{=title}} <span class="time"> {{=website}} - {{=published}}</span></h4></a>
-				<p>{{=description}}</p>
-                </article>
+    {{if arr is not None:}}
+        {{for cl in arr:}}
+            {{posts = postEntries.get(cl)}}
+            {{if posts is not None:}}
+                {{first = True}}
+                <div>
+                {{for (postId, title, image, description, link, published, website) in posts:}}
+                    {{if first:}}
+                        <article>
+                        <a href="{{=link}}" target="_blank"><img src="{{=image}}" /></a>
+                        <a href="{{=link}}" target="_blank"><h4>{{=title}} <span class="time"> {{=website}} - {{=published}}</span></h4></a>
+                        <p>{{=description}}</p>
+                        </article>
+                        {{if len(posts) > 1:}}
+                            <span class="more"> Повеќе поврзани статии» </span>
+                        {{pass}}
+                        <div class="related">
+                    {{else:}}
+                        <a href="{{=link}}" target="_blank"><h5>{{=title}}</h5></a>
+                    {{pass}}
+                    {{first=False}}
+                {{pass}}
                 {{if len(posts) > 1:}}
-                <span class="more"> Повеќе поврзани статии» </span>
+                    </div>
                 {{pass}}
-                <div class="related">
-                {{else:}}
-                    <a href="{{=link}}" target="_blank"><h5>{{=title}}</h5></a>
-                {{pass}}
-                {{first=False}}
-
+                </div>
             {{pass}}
-               {{if len(posts) > 1:}}
-               </div>
-               {{pass}}
-            </div>
         {{pass}}
     {{pass}}
-    {{pass}}
-
-
-
-
 </div>
 {{pass}}
 {{=BR()}}

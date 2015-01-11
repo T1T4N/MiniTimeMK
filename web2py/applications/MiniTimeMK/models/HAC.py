@@ -378,6 +378,11 @@ def clustering():
     t1 = millis()
     last_id = -1
     result = {}
+
+    # Empty cluster table and reset id
+    db(db.cluster).delete()
+    db.executesql("ALTER TABLE cluster AUTO_INCREMENT=1")
+
     for key in sorted(final_dict, reverse=True):
         cluster_posts = []
         cluster_categories = {}
