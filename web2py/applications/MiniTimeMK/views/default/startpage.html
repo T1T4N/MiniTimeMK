@@ -1,46 +1,37 @@
 {{extend 'layout1.html'}}
 
-<div id="f1_container">
-<div id="f1_card" class="shadow">
-  <div class="front face">
-    <img src="http://www.mkd.mk/files/styles/rubrika_top/public/article/2014/09/08/mkd-147264.jpg?itok=r9S1tNnW" />
-    <h4>Од денеска без магла со попладневни слаби врнежи од дожд</h4>
-    <p>Денеска конечно ќе дојде крајот на проблемите со маглата. Времето денеска ќе биде променливо облачно со послаби локални врнежи од дожд. Земјава денеска повторно ќе биде под ново циклонско влијание, нов влажен бран кој во доцните попладневни часови ќе донесе слаби врнежи од дожд во североисточниот и западниот дел од земјата.</p>
-    <div style="clear:both"></div>
-  </div>
-  <div class="back face center">
-    <p>This is nice for exposing more information about an image.</p>
-    <p>Any content can go here.</p>
-    <div style="clear:both"></div>
-  </div>
-  <div style="clear:both"></div>
-</div>
-</div>
-
 {{for (id, category) in categoryentries:}}
 <div class="category">
 	<h3>{{=category}}</h3>
 
     {{arr = clusterEntries.get(id)}}
 
-    {{if arr is not None:}}
+    {{if not arr == None:}}
     {{for cl in arr:}}
         {{posts = postEntries.get(cl)}}
-        {{if posts is not None:}}
+        {{if not posts == None:}}
         {{first = True}}
             <div>
-            {{for (postId, title, image, description, link) in posts:}}
+            {{for (postId, title, image, description, link, published, website) in posts:}}
                 {{if first:}}
                 <article>
 				<a href="{{=link}}" target="_blank"><img src="{{=image}}" /></a>
-				<a href="{{=link}}" target="_blank"><h4>{{=title}}</h4></a>
+				<a href="{{=link}}" target="_blank"><h4>{{=title}} <span class="time"> {{=website}} - {{=published}}</span></h4></a>
 				<p>{{=description}}</p>
+                </article>
+                {{if len(posts) > 1:}}
+                <span class="more"> Повеќе поврзани статии» </span>
+                {{pass}}
+                <div class="related">
                 {{else:}}
                     <a href="{{=link}}" target="_blank"><h5>{{=title}}</h5></a>
                 {{pass}}
                 {{first=False}}
-			</article>
+
             {{pass}}
+               {{if len(posts) > 1:}}
+               </div>
+               {{pass}}
             </div>
         {{pass}}
     {{pass}}

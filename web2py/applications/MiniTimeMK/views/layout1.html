@@ -24,7 +24,7 @@
 	.category{
 		overflow: auto;
 	}
-	.category div{
+	.category > div{
 		padding: 0.3%;
 		border: 1px solid #CCC;
 		width: 31%;
@@ -33,27 +33,42 @@
 		float: left;
 		margin-right: 2.6%;
 		font-size: 0.85em;
+        text-align: right;
 	}
 	article h4, article p{
 		margin: 0.3em 0;
+        text-align: left;
 	}
 	article p{
 		font-size: 0.8em;
+        text-align: justify;
 	}
-	.category > article:nth-of-type(2){
+	.category div:nth-of-type(2){
 		margin-left: -3px;
 	}
-	.category > article:nth-of-type(3){
+	.category div:nth-of-type(3){
 		margin-right: 0;
 		margin-left: -3px;
 	}
+    .category h5{
+        text-align: left;
+    }
 	article img{
 		width: 100%;
 	}
+    .related{
+        display: none;
+    }
 	.time{
 		font-size: 0.6em;
 		color: #666;
 	}
+    .more{
+        cursor: pointer;
+        font-size: 0.8em;
+        font-weight: bold;
+        color: #0088ff;
+    }
 	#f1_container {
 	  position: relative;
 	  margin: 10px auto;
@@ -94,6 +109,22 @@
 	  background-color: #aaa;
 	}
 	</style>
+    <script src="http://code.jquery.com/jquery-1.11.2.min.js"></script>
+    <script>
+        $(document).ready(function(){
+            $('.more').click(function () {
+                if($.trim($(this).text()) === "Повеќе поврзани статии»"){
+                    $(this).text("Врати се назад");
+                    $(this).parent().find("article").hide();
+                    $(this).parent().find(".related").show();
+                }else{
+                    $(this).parent().find(".related").hide();
+                    $(this).parent().find("article").show();
+                    $(this).text("Повеќе поврзани статии»");
+                }
+            });
+        });
+    </script>
 </head>
 <body>
 <header>

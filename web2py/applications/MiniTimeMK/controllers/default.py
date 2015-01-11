@@ -10,6 +10,7 @@
 #########################################################################
 import feedparser
 from time import strftime
+from datetime import datetime
 from bs4 import BeautifulSoup
 from Queue import Queue
 import urllib
@@ -231,6 +232,42 @@ def index_generated():
     return dict(msg=T('HEY'))
 
 
+def days_between(days):
+    #convertes days to weeks/months/years
+    if days >= 365:
+        return str(int(days/365)) + " год"
+    if days >= 30:
+        return str(int(days/30)) + " мес"
+    if days >= 7:
+        return str(int(days/7)) + " нед"
+    if days == 1:
+        return str(days) + " ден"
+    return str(days) + " дена"
+
+def hours_ago(mins):
+    #convertes minutes to hours
+    if mins >= 60:
+        hours = int(mins/60)
+        if hours == 1:
+            return "1 час"
+        else:
+            return str(hours) + " часа"
+    else:
+        return str(mins) + " мин"
+
+def time_between(d1, d2):
+    #calculates difference between two date
+    #d1 > d2
+    d1 = datetime.strptime(d1, "%Y-%m-%d %H:%M:%S")
+    d2 = datetime.strptime(d2, "%Y-%m-%d %H:%M:%S")
+    days = (d1 - d2).days
+    if days > 0:
+        return str(days_between(days))
+    else:
+        minutes = int((d1-d2).total_seconds())
+        return hours_ago(minutes)
+
+
 def startpage():
     categories = db().select(db.categories.ALL)
 
@@ -246,14 +283,16 @@ def startpage():
             tempCluster = clusterEntries.get(category.id, [])
             tempCluster.append(cluster.id)
             clusterEntries[category.id] = tempCluster
-
             print("cluster " + str(cluster.id))
-            posts = db(cluster.id == db.posts.cluster).select(db.posts.ALL, orderby=db.posts.id)
-            for post in posts[:5]:
+            posts = db((cluster.id == db.posts.cluster) & (db.posts.source == db.sources.id)).select(db.posts.ALL,
+                                                                                db.sources.website, orderby=db.posts.id)
+            for post in posts[:9]:
                 tempPosts = postEntries.get(cluster.id, [])
-                tempPosts.append([post.id, post.title, post.imageurl, post.description, post.link])
+                timeAgo = "пред " + time_between(str(time.strftime("%Y-%m-%d %H:%M:%S")), str(post.posts.pubdate))
+                tempPosts.append([post.posts.id, post.posts.title, post.posts.imageurl,
+                                  post.posts.description, post.posts.link, timeAgo, post.sources.website])
                 postEntries[cluster.id] = tempPosts
-                print ("post " + str(post.id))
+                print ("post " + str(post.posts.id))
 
     return dict(message=T('Hello WORLD'),
                 categoryentries=categoryentries,
