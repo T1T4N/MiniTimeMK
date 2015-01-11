@@ -218,7 +218,7 @@ def index():
                                     recode=row.rssfeeds.recode,
                                     clean_regex=words_extraction_regex))
 
-    new_posts = rss_extract_items(feeds)
+    # new_posts = rss_extract_items(feeds)
     new_clusters = clustering()
 
     response.flash = T("Welcome to miniTimeMK")
