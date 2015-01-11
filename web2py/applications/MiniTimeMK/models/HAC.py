@@ -85,29 +85,32 @@ def inverse_document_frequency(term, documents):
     return math.log(1.0 * len(documents) / total)
 
 
-def tf_idf(document, words_sets):
+def tf_idf(document, words_sets, terms_set=None):
     """
     Calculates the top 12 tf-idf keywords of a document.
 
     :param document: The document whose tf-idf should be calculated, represented as a string list
     :param words_sets: A list of the documents' words represented as string sets
+    :param terms_set: An optional set of terms for which to calculate tf_idf
+        If None, tf_idf is calculated for every word in the document
     :return: A dictionary of the 12 tf-idf keywords and their weights,
         or an empty dictionary if there aren't 12 keywords
     """
 
+    terms = document if terms_set is None else terms_set
     tokens = {}
-    for term in document:
+    for term in terms:
         weight = term_frequency(term, document) * inverse_document_frequency(term, words_sets)
         tokens[term] = weight
 
     sorted_tokens = sorted(tokens.items(), key=lambda item: item[1], reverse=True)
 
     ret = collections.defaultdict(lambda: 0)
-    if len(sorted_tokens) > 12:
+    if len(sorted_tokens) >= 12:
         for j in range(12):
             term = sorted_tokens[j][0]
             weight = sorted_tokens[j][1]
-            # print term, ' <-> ', weight
+
             ret[term] = weight
     return ret
 
@@ -165,27 +168,11 @@ def merge_texts(vec_i, vec_j, doc1, doc2, docs_splitted, words_sets):
     # This was the original implementation
     # res = tf_idf(result, words_sets)
 
-    # WARNING: Experimental implementation below.
-    # Huge speedup for HAC.
-    rc = set([])
-    rc.update(vec_i.keys())
-    rc.update(vec_j.keys())
+    max_set = set([])
+    max_set.update(vec_i.keys())
+    max_set.update(vec_j.keys())
 
-    tokens = {}
-    for term in rc:
-        weight = term_frequency(term, result) * inverse_document_frequency(term, words_sets)
-        tokens[term] = weight
-
-    sorted_tokens = sorted(tokens.items(), key=lambda item: item[1], reverse=True)
-
-    ret = collections.defaultdict(lambda: 0)
-    if len(sorted_tokens) > 12:
-        for j in range(12):
-            term = sorted_tokens[j][0]
-            weight = sorted_tokens[j][1]
-            # print term, ' <-> ', weight
-            ret[term] = weight
-
+    ret = tf_idf(result, words_sets, max_set)
     return merge_id, ret
 
 
@@ -328,8 +315,8 @@ def clustering():
     vector_to_post_id = {}  # A helper dictionary for mapping between relative vector indexes and post_id
     docs_to_post_id = {}    # A helper dictionary for mapping between relative docs_splitted indexes and post_id
 
-    limit = 200 #len(docs)  # 600
-    threshold = 0.4
+    limit = len(docs)  # 600
+    threshold = 0.421
 
     print 'Posts splitting started'
     t1 = millis()
@@ -389,7 +376,6 @@ def clustering():
 
     print 'Inserting clusters into database'
     t1 = millis()
-    current_time = time.time()
     last_id = -1
     result = {}
     for key in sorted(final_dict, reverse=True):
@@ -398,11 +384,9 @@ def clustering():
         min_epoch = time.time()
         master_id = -1
 
-        # print key, ' ',
         for it in final_dict[key]:  # final_dict[key] is a list of post_ids
             post_id = int(vector_to_post_id[it])
             cluster_posts.append(post_id)
-            # print 'V:', it, 'D:', post_id,
 
             post_row = db.posts[post_id]
             post_category = int(post_row.category)
@@ -434,18 +418,18 @@ def clustering():
         # This gives the difference in seconds, a pretty big number.
         # Divided by 3600 to get hours, because 2 hours = 7200 seconds
         # and exp(-7200) ~ 0.0, and we need a valid metric for more than 2 hours
-        #cluster_score = math.exp(-(current_time - min_epoch)/(60*60))*math.log(len(cluster_posts))
+        # cluster_score = math.exp(-(current_time - min_epoch)/(60*60))*math.log(len(cluster_posts))
 
-        #alpha e faktor moze da se menuva i spored nego kje se gleda kolku vlijae starosta
+        # alpha e faktor moze da se menuva i spored nego kje se gleda kolku vlijae starosta
         alpha = 1
         time_now = time.time()
-        sum = 0
+        sum_time = 0.0
         for post_id in cluster_posts:
             t = time.mktime(db.posts[post_id].pubdate.timetuple())
-            c = math.exp(-(time_now - t) / 60 / 60)
-            sum += c
+            c = math.exp(- abs(time_now - t) / (60.0 * 60.0))
+            sum_time += c
 
-        average = alpha * sum / len(cluster_posts)
+        average = alpha * sum_time / len(cluster_posts)
 
         cluster_score = average * math.log(len(cluster_posts))
 
@@ -457,12 +441,14 @@ def clustering():
         if last_id == -1:   # Get next cluster_ids with one select
             last_id = db().select(db.cluster.ALL).last().id
 
+        print last_id, ' : ',
         # Update cluster value, unavoidable
         for post_id in cluster_posts:
             db(db.posts.id == post_id).update(cluster=last_id)
+            print post_id,
 
         result[last_id] = (cluster_score, master_id, cluster_category, cluster_posts)
-        # print
+        print
         last_id += 1
 
     t2 = millis()

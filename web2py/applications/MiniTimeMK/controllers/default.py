@@ -167,7 +167,7 @@ def rss_extract_items(feeds_list):
     print 'Parallel fetch started', len(feeds_list), 'feeds'
     t1 = millis()
     for i, feed_options_item in enumerate(feeds_list):
-        # print 'Extracting feed: ', feed_options_item.feed_url
+        print 'Extracting feed: ', i, feed_options_item.feed_url
         ret += (parse_feed_parallel(feed_options_item, raw_links))
     t2 = millis()
     print "Number of posts: %d" % len(ret)
@@ -218,7 +218,7 @@ def index():
                                     recode=row.rssfeeds.recode,
                                     clean_regex=words_extraction_regex))
 
-    # new_posts = rss_extract_items(feeds)
+    new_posts = rss_extract_items(feeds)
     new_clusters = clustering()
 
     response.flash = T("Welcome to miniTimeMK")
@@ -249,7 +249,6 @@ def user():
     return dict(form=auth())
 
 
-
 def download():
     """
     allows downloading of uploaded files
@@ -266,7 +265,6 @@ def call():
     supports xml, json, xmlrpc, jsonrpc, amfrpc, rss, csv
     """
     return service()
-
 
 
 def api():
