@@ -2,7 +2,7 @@
 
 {{for (id, category) in categoryentries:}}
     <div class="category">
-	<h3>{{=category}}</h3>
+	<h3>{{=A(category, _href=URL(f='startpage',vars=dict(cat_id=id)))}}</h3>
     {{arr = clusterEntries.get(id)}}
 
     {{if arr is not None:}}

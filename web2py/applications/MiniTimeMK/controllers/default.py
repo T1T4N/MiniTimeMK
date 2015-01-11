@@ -219,31 +219,40 @@ def index_static():
 
 
 def startpage():
+    req_category = request.vars.get('cat_id', None)
+
     all_categories = db().select(db.categories.ALL)
+    category_list = all_categories if req_category is None \
+        else db(db.categories.id == req_category).select(db.categories.ALL)
 
     category_entries = []
     cluster_entries = {}
     post_entries = {}
 
-    for category in all_categories:
+    for category in category_list:
         category_entries.append((category.id, category.category))
         clusters = db(category.id == db.cluster.category).select(db.cluster.ALL, orderby=~db.cluster.score)
-        print("Category " + str(category.id))
+        cluster_len = 3 if req_category is None else len(clusters)
+        print "Category: ", category.id, category.category
 
-        for cluster in clusters[:3]:
+        for cluster in clusters[:cluster_len]:
             temp_cluster = cluster_entries.get(category.id, [])
             temp_cluster.append(cluster.id)
             cluster_entries[category.id] = temp_cluster
-            print("cluster " + str(cluster.id))
+            print("Cluster: " + str(cluster.id))
+
             posts = db((cluster.id == db.posts.cluster) &
                        (db.posts.source == db.sources.id)).select(db.posts.ALL, db.sources.website, orderby=db.posts.id)
-            for post in posts[:9]:
+            posts_len = 9 if req_category is None else len(posts)
+            for post in posts[:posts_len]:
                 temp_posts = post_entries.get(cluster.id, [])
                 time_ago = "пред " + time_between(str(time.strftime("%Y-%m-%d %H:%M:%S")), str(post.posts.pubdate))
                 temp_posts.append([post.posts.id, post.posts.title, post.posts.imageurl,
                                   post.posts.description, post.posts.link, time_ago, post.sources.website])
                 post_entries[cluster.id] = temp_posts
-                print ("post " + str(post.posts.id))
+                print ("Post: " + str(post.posts.id))
+            print
+        print
 
     return dict(categoryentries=category_entries,
                 clusterEntries=cluster_entries,
