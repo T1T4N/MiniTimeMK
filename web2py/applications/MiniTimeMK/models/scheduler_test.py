@@ -55,7 +55,7 @@ def time_between(d1, d2):
     if days > 0:
         return str(days_between(days))
     else:
-        minutes = int((d1-d2).total_seconds())
+        minutes = int((d1-d2).total_seconds()/60)
         return hours_ago(minutes)
 
 
