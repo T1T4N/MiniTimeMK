@@ -243,8 +243,7 @@ def startpage():
 
             posts = db((cluster.id == db.posts.cluster) &
                        (db.posts.source == db.sources.id)).select(db.posts.ALL, db.sources.website, orderby=db.posts.id)
-            posts_len = 9 if req_category is None else len(posts)
-            for post in posts[:posts_len]:
+            for post in posts:
                 temp_posts = post_entries.get(cluster.id, [])
                 time_ago = "пред " + time_between(str(time.strftime("%Y-%m-%d %H:%M:%S")), str(post.posts.pubdate))
                 temp_posts.append([post.posts.id, post.posts.title, post.posts.imageurl,

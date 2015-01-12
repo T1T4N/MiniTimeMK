@@ -6,11 +6,15 @@
     {{arr = clusterEntries.get(id)}}
 
     {{if arr is not None:}}
-        {{for cl in arr:}}
+        {{for i, cl in enumerate(arr):}}
             {{posts = postEntries.get(cl)}}
             {{if posts is not None:}}
                 {{first = True}}
-                <div>
+                {{if i%3 == 0:}}
+                    <div class="first_in_row">
+                {{else:}}
+                    <div>
+                {{pass}}
                 {{for (postId, title, image, description, link, published, website) in posts:}}
                     {{if first:}}
                         <article>
