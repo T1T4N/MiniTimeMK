@@ -25,6 +25,10 @@ possible_languages = read_possible_languages(abspath('applications', app))
 #NOTE! app - is an application based router's parameter with name of an
 #            application. E.g.'welcome'
 
+"""
+routers = dict(
+  BASE  = dict(default_application='myapp'),
+)"""
 routers = {
     app: dict(
         default_language = possible_languages['default'][0],

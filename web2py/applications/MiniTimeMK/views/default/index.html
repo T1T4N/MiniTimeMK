@@ -1,16 +1,44 @@
-{{extend 'layout.html'}}
-{{for (cluster_id, (cluster_score, master_id, cluster_category, cluster_posts)) in entries:}}
-<div>
-<li>Cluster ID: {{=cluster_id}}, Cluster size: {{=len(cluster_posts)}}</li>
-<li>Cluster score: {{=B(cluster_score)}}</li>
-<li>Cluster category: {{=B(db.categories[cluster_category].category)}}</li>
-{{=A(IMG(_src=db.posts[master_id].imageurl, _width="120px", _height="120px"), _href=db.posts[master_id].imageurl)}} {{=A(db.posts[master_id].title, _href=db.posts[master_id].link)}}
-{{=LI(P(I(db.posts[master_id].description)))}}
-<h5>Cluster posts:</h5>
-{{for post_id in cluster_posts:}}
-{{=LI(A(db.posts[post_id].title, _href=db.posts[post_id].link))}}
-{{pass}}
-{{=BR()}}
+{{extend 'layout1.html'}}
+<h2>{{=A("Static Page", _href=URL('static', 'index.html'))}}</h2>
+
+{{for (id, category) in categoryentries:}}
+    <div class="category">
+	<h3>{{=A(category, _href=URL(f='index',vars=dict(cat_id=id)))}}</h3>
+    {{arr = clusterEntries.get(id)}}
+
+    {{if arr is not None:}}
+        {{for i, cl in enumerate(arr):}}
+            {{posts = postEntries.get(cl)}}
+            {{if posts is not None:}}
+                {{first = True}}
+                {{if i%3 == 0:}}
+                    <div class="first_in_row">
+                {{else:}}
+                    <div>
+                {{pass}}
+                {{for (postId, title, image, description, link, published, website) in posts:}}
+                    {{if first:}}
+                        <article>
+                        <a href="{{=link}}" target="_blank"><img src="{{=image}}" /></a>
+                        <a href="{{=link}}" target="_blank"><h4>{{=title}} <span class="time"> {{=website}} - {{=published}}</span></h4></a>
+                        <p>{{=description}}</p>
+                        </article>
+                        {{if len(posts) > 1:}}
+                            <span class="more"> Повеќе поврзани статии» </span>
+                        {{pass}}
+                        <div class="related">
+                    {{else:}}
+                        <a href="{{=link}}" target="_blank"><h5>{{=title}}</h5></a>
+                    {{pass}}
+                    {{first=False}}
+                {{pass}}
+                {{if len(posts) > 1:}}
+                    </div>
+                {{pass}}
+                </div>
+            {{pass}}
+        {{pass}}
+    {{pass}}
 </div>
-{{=BR()}}
 {{pass}}
+{{=BR()}}

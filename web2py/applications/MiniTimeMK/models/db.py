@@ -14,7 +14,7 @@ if not request.env.web2py_runtime_gae:
     # db = DAL('sqlite://storage.sqlite',pool_size=1,check_reserved=['all'])
     db = DAL('mysql://root:@localhost/timemk')
 
-    db.define_table('categories', Field('category'), Field('factor'), fake_migrate=True)
+    db.define_table('categories', Field('category'), Field('factor'), Field('static_name'), fake_migrate=True)
     db.define_table('posts', Field('link'), Field('cluster'), Field('category'), Field('source'), Field('title'),
                     Field('text'), Field('description'), Field('imageurl'), Field('pubdate'), fake_migrate=True)
     db.define_table('rssfeeds', Field('source'), Field('category'), Field('feed'), Field("recode"), fake_migrate=True)

@@ -61,6 +61,7 @@ def parse_feed_parallel(feed_options_item, all_links):
 
     # Create a thread for each entry in the feed which is not present in the database
     # TODO: Limit number of threads to 5-10
+    t1 = millis()
     threads = []
 
     for entry in d.entries:
@@ -176,15 +177,18 @@ def rss_extract_items(feeds_list):
     return ret
 
 
-def index():
+def update():
     """
     example action using the internationalization operator T and flash
     rendered by views/default/index.html or views/generic.html
 
     if you need a simple wiki simply replace the two lines below with:
     return auth.wiki()
+    Fetches new posts, updates the database, performs clustring and generates static pages
     """
+    t1 = millis()
 
+    # TODO: This should go in scheduler_test
     # Selects zero or more occurrences of any interpunction sign in the set
     interpunction_regex = u'(?:\s|[,."\'`:;!@#$%^&*()_<>/=+„“”–\-\\\|\[\]])' + u'*'
 
@@ -205,25 +209,30 @@ def index():
                                     clean_regex=words_extraction_regex))
 
     # new_posts = rss_extract_items(feeds)
-    # new_clusters = clustering()
+    new_clusters = clustering()
     generate_static()
 
-    redirect('startpage')
-    return dict(
-                # entries=new_clusters
-                )
+    t2 = millis()
+    print 'Total update time: %d ms' % (t2 - t1)
 
-
-def index_static():
+    redirect('index')
     return dict()
 
 
-def startpage():
+def index():
     req_category = request.vars.get('cat_id', None)
+    try:
+        if req_category is not None:
+            req_category = int(req_category)
+    except ValueError:
+        redirect('index')
 
     all_categories = db().select(db.categories.ALL)
-    category_list = all_categories if req_category is None \
-        else db(db.categories.id == req_category).select(db.categories.ALL)
+    if req_category is None or not isinstance(req_category, int) \
+            or req_category < 0 or req_category > len(all_categories):
+        category_list = all_categories
+    else:
+        category_list = db(db.categories.id == req_category).select(db.categories.ALL)
 
     category_entries = []
     cluster_entries = {}
@@ -233,13 +242,13 @@ def startpage():
         category_entries.append((category.id, category.category))
         clusters = db(category.id == db.cluster.category).select(db.cluster.ALL, orderby=~db.cluster.score)
         cluster_len = 3 if req_category is None else len(clusters)
-        print "Category: ", category.id, category.category
+        # print "Category: ", category.id, category.category
 
         for cluster in clusters[:cluster_len]:
             temp_cluster = cluster_entries.get(category.id, [])
             temp_cluster.append(cluster.id)
             cluster_entries[category.id] = temp_cluster
-            print("Cluster: " + str(cluster.id))
+            # print("Cluster: " + str(cluster.id))
 
             posts = db((cluster.id == db.posts.cluster) &
                        (db.posts.source == db.sources.id)).select(db.posts.ALL, db.sources.website, orderby=db.posts.id)
@@ -249,7 +258,7 @@ def startpage():
                 temp_posts.append([post.posts.id, post.posts.title, post.posts.imageurl,
                                   post.posts.description, post.posts.link, time_ago, post.sources.website])
                 post_entries[cluster.id] = temp_posts
-                print ("Post: " + str(post.posts.id))
+                # print ("Post: " + str(post.posts.id))
             print
         print
 
