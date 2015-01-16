@@ -24,11 +24,13 @@ def get_html(entry, queue):
     :param entry: The RSS Feed entry
     :param queue: The queue where to store the result
     """
-
-    page_file = urllib.urlopen(entry.link.encode("utf-8"))
-    entry_html = page_file.read()
-    page_file.close()
-    queue.put((entry, "".join(entry_html)))
+    try:
+        entry_html = urllib.urlopen(entry.link.encode("utf-8")).read()
+        queue.put((entry, "".join(entry_html)))
+    except IOError as e:
+        print "ERROR: ", e.strerror
+    except RuntimeError as e:
+        print "ERROR runtime: ", e.strerror
 
 
 def get_encoding(soup):
@@ -45,25 +47,92 @@ def get_encoding(soup):
     return ret
 
 
-def parse_feed_parallel(feed_options_item, all_links):
+def parse_rss_post(entry, soup, feed_options_item):
+    default_date = "2000-01-01 07:58:55"
+    default_encoding = "utf-8"
+
+    item_description = ""
+    item_text = ""
+    image_url = ""
+
+    item_link = entry.link
+    if 'feedproxy.google' in item_link:     # Feedproxy workaround
+        item_link = entry.get("feedburner_origlink", item_link)
+
+    item_pub_date = entry.get("published", default_date)   # default
+    if item_pub_date != default_date:
+        if entry.published_parsed is None or entry.published_parsed == "":
+            item_pub_date = default_date
+        else:
+            # TODO: timezone adjustment
+            item_pub_date = strftime("%Y-%m-%d %H:%M:%S", entry.published_parsed)
+
+    # TODO: Workaround for Kanal5 missing publish date
+    if feed_options_item.source_id == 1:
+        pass
+
+    if feed_options_item.item_rss_description:
+        item_description = entry.description
+
+    if feed_options_item.content_from_rss:
+        item_text = entry[feed_options_item.content_rss_tag]
+    else:
+        selectors = feed_options_item.content_css_selector.split(",")
+        for selector in selectors:
+            content_entries = soup.select(selector)
+            if len(content_entries) > 0:
+                for part in content_entries:
+                    item_text += part.get_text() + " "
+
+        if feed_options_item.recode:
+            item_text = item_text.encode(soup.original_encoding, errors='ignore')
+            item_text = item_text.decode(default_encoding, errors='ignore')
+
+    if feed_options_item.image_from_rss:
+        image_url = entry[feed_options_item.image_rss_tag]
+    else:
+        image_entries = soup.select(feed_options_item.image_css_selector)
+        if len(image_entries) > 0:  # May not contain image
+            image_url = image_entries[0]["src"]
+
+    '''
+    Regex cleaning here
+    '''
+    import re
+    item_filtered_text = item_text.lower()
+    for (regex_expr, output_fmt) in feed_options_item.clean_regex:
+        item_filtered_text = re.sub(regex_expr, output_fmt, item_filtered_text)
+
+    rss_post = RSSPost(page_url=item_link,
+                       category=feed_options_item.category,
+                       source=feed_options_item.source_id,
+                       pub_date=item_pub_date,
+                       item_title=entry.title,
+                       item_content=item_text,
+                       item_filtered_content=item_filtered_text,
+                       item_description=item_description,
+                       item_image_url=image_url)
+    return rss_post
+
+
+def parse_feed_parallel(num, feed_options_item, all_links, queue, t_limit=None):
     """
     Parallel creation of a RSSItem for each post in the feed.
 
+    :param num: The feed's number in the list. For DEBUG purposes
     :param feed_options_item: The RSS Feed options
     :param all_links: A set of all the links in the database
-    :return: A list of RSSItems for each post
+    :param queue: A Queue to store the resulting RSSPost objects
+    :param t_limit: An integer used to limit the number of running threads
     """
-    default_date = "2000-01-01 07:58:55"
-    default_encoding = "utf-8"
+    print 'Extracting feed: ', num, feed_options_item.feed_url
     d = feedparser.parse(feed_options_item.feed_url)
 
+    # Used to hold the resulting HTML strings
     entries = Queue()   # Queue is thread-safe
 
     # Create a thread for each entry in the feed which is not present in the database
-    # TODO: Limit number of threads to 5-10
-    t1 = millis()
     threads = []
-
     for entry in d.entries:
         if 'feedproxy.google' in entry.link:    # Feedproxy workaround
             if entry.get("feedburner_origlink", entry.link) not in all_links:
@@ -72,83 +141,34 @@ def parse_feed_parallel(feed_options_item, all_links):
             if entry.link not in all_links:
                 threads.append(threading.Thread(target=get_html, args=(entry, entries)))
 
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
+    # Run threads depending on thread limit
+    if t_limit:
+        for i in range(0, len(threads), t_limit):
+            for j in range(min(t_limit, len(threads) - i)):
+                threads[i+j].start()
+            for j in range(min(t_limit, len(threads) - i)):
+                threads[i+j].join()
 
-    res = []
-    while not entries.empty():
-        (entry, html) = entries.get_nowait()
-        soup = BeautifulSoup(html)
+            # Run t_limit post threads, wait for them to finish, process the posts
+            while not entries.empty():
+                (entry, html) = entries.get_nowait()
+                soup = BeautifulSoup(html)
 
-        item_description = ""
-        item_text = ""
-        image_url = ""
+                rss_post = parse_rss_post(entry, soup, feed_options_item)
+                queue.put(rss_post)
+    else:
+        # If t_limit is None, run all post threads at once
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
 
-        item_link = entry.link
-        if 'feedproxy.google' in item_link:     # Feedproxy workaround
-            item_link = entry.get("feedburner_origlink", item_link)
+        while not entries.empty():
+            (entry, html) = entries.get_nowait()
+            soup = BeautifulSoup(html)
 
-        item_pub_date = entry.get("published", default_date)   # default
-        if item_pub_date != default_date:
-            if entry.published_parsed is None or entry.published_parsed == "":
-                item_pub_date = default_date
-            else:
-                # TODO: timezone adjustment
-                item_pub_date = strftime("%Y-%m-%d %H:%M:%S", entry.published_parsed)
-
-        # TODO: Workaround for Kanal5 missing publish date
-        if feed_options_item.source_id == 1:
-            pass
-
-        if feed_options_item.item_rss_description:
-            item_description = entry.description
-
-        if feed_options_item.content_from_rss:
-            item_text = entry[feed_options_item.content_rss_tag]
-        else:
-            selectors = feed_options_item.content_css_selector.split(",")
-            for selector in selectors:
-                content_entries = soup.select(selector)
-                if len(content_entries) > 0:
-                    for part in content_entries:
-                        item_text += part.get_text() + " "
-
-            if feed_options_item.recode:
-                item_text = item_text.encode(soup.original_encoding, errors='ignore')
-                item_text = item_text.decode(default_encoding, errors='ignore')
-
-        if feed_options_item.image_from_rss:
-            image_url = entry[feed_options_item.image_rss_tag]
-        else:
-            image_entries = soup.select(feed_options_item.image_css_selector)
-            if len(image_entries) > 0:  # May not contain image
-                image_url = image_entries[0]["src"]
-
-        '''
-        Regex cleaning here
-        '''
-        import re
-        item_filtered_text = item_text.lower()
-        for (regex_expr, output_fmt) in feed_options_item.clean_regex:
-            item_filtered_text = re.sub(regex_expr, output_fmt, item_filtered_text)
-
-        rss_post = RSSPost(page_url=item_link,
-                           category=feed_options_item.category,
-                           source=feed_options_item.source_id,
-                           pub_date=item_pub_date,
-                           item_title=entry.title,
-                           item_content=item_text,
-                           item_filtered_content=item_filtered_text,
-                           item_description=item_description,
-                           item_image_url=image_url)
-
-        if not rss_post.db_insert():
-            break   # If post is already present in database, stop
-
-        res.append(rss_post)
-    return res
+            rss_post = parse_rss_post(entry, soup, feed_options_item)
+            queue.put(rss_post)
 
 
 def rss_extract_items(feeds_list):
@@ -158,23 +178,40 @@ def rss_extract_items(feeds_list):
     Feeds array should consists of RSSFeedOptions items.
 
     :param feeds_list: A list of RSSFeedOptions items
-    :return: A list of RSSItem items.
     """
-
     all_dbrow_links = db().select(db.posts.link)    # List of Row objects containing the links
     raw_links = set([row.link for row in all_dbrow_links])  # Set of strings containing the links
 
-    ret = []
+    items = Queue()
     print 'Parallel fetch started', len(feeds_list), 'feeds'
     t1 = millis()
+
+    f_limit = 6     # Number of feeds to process in parallel
+    t_limit = 15    # Number of posts to process in parallel in each feed
+    print f_limit, "feed threads with", t_limit, "post threads"
+    threads = [threading.Thread(target=parse_feed_parallel,
+                                args=(i, feed_options_item, raw_links, items, t_limit))
+               for i, feed_options_item in enumerate(feeds_list)]
+
+    for i in range(0, len(threads), f_limit):
+        for j in range(min(f_limit, len(threads) - i)):
+            threads[i+j].start()
+        for j in range(min(f_limit, len(threads) - i)):
+            threads[i+j].join()
+    """
     for i, feed_options_item in enumerate(feeds_list):
-        print 'Extracting feed: ', i, feed_options_item.feed_url
-        ret += (parse_feed_parallel(feed_options_item, raw_links))
+        parse_feed_parallel(i, feed_options_item, raw_links, items, None)
+    """
     t2 = millis()
-    print "Number of posts: %d" % len(ret)
     print "Parallel: feeds processed in %d ms" % (t2-t1)
 
-    return ret
+    print items.qsize(), "posts",
+    t1 = millis()
+    while not items.empty():
+        rss_post = items.get_nowait()
+        rss_post.db_insert()
+    t2 = millis()
+    print "inserted in: %d ms" % (t2 - t1)
 
 
 def update():
@@ -184,7 +221,7 @@ def update():
 
     if you need a simple wiki simply replace the two lines below with:
     return auth.wiki()
-    Fetches new posts, updates the database, performs clustring and generates static pages
+    Fetches new posts, updates the database, performs clustering and generates static pages
     """
     t1 = millis()
 
@@ -208,7 +245,7 @@ def update():
                                     recode=row.rssfeeds.recode,
                                     clean_regex=words_extraction_regex))
 
-    # new_posts = rss_extract_items(feeds)
+    rss_extract_items(feeds)
     new_clusters = clustering()
     generate_static()
 
@@ -259,8 +296,8 @@ def index():
                                   post.posts.description, post.posts.link, time_ago, post.sources.website])
                 post_entries[cluster.id] = temp_posts
                 # print ("Post: " + str(post.posts.id))
-            print
-        print
+            # print
+        # print
 
     return dict(categoryentries=category_entries,
                 clusterEntries=cluster_entries,

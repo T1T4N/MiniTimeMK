@@ -142,7 +142,7 @@ def create_static_page(page_name, pages_url, categories, cluster_entries, post_e
     .related{
         display: none;
     }
-    .time{
+    .time, .count{
         font-size: 0.6em;
         color: #666;
     }
@@ -226,7 +226,7 @@ def create_static_page(page_name, pages_url, categories, cluster_entries, post_e
                 posts = post_entries.get(cl)
                 if posts is not None:
                     first = True
-                    if i%3 == 0:
+                    if i % 3 == 0:
                         f.write('<div class="first_in_row">')
                     else:
                         f.write('<div>')
@@ -234,7 +234,10 @@ def create_static_page(page_name, pages_url, categories, cluster_entries, post_e
                         if first:
                             f.write('<article>')
                             f.write('<a href="' + link + '" target="_blank"><img src="' + image + '" /></a>')
-                            f.write('<a href="' + link + '" target="_blank"><h4>' + title + ' <span class="time"> ' + website + ' - ' + published + '</span></h4></a>')
+                            f.write('<a href="' + link + '" target="_blank"><h4><span class="title">' + title +
+                                    '</span></br><span class="time"> ' + website + ' - ' + published + '</span> ' +
+                                    '<span class="count">' + str(len(posts)) + ' поврзани вести</span>'
+                                    '</h4></a>')
                             f.write('<p>' + description + '</p>')
                             f.write('</article>')
                             if len(posts) > 1:
@@ -311,6 +314,7 @@ def generate_static():
         t.join()
 
     t2 = millis()
+    print
     print 'Generating static pages: %d ms' % (t2 - t1)
 
 

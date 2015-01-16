@@ -21,12 +21,13 @@ def get_all_posts():
     """
     rows = []
     # Very important not to have duplicates in the select !
+    # TODO: Get only posts from the last 2 days
     for row in db().select(db.posts.ALL):
         text = row.text
         text = re.sub('\n', ' ', text)
         text = re.sub('\s+', ' ', text)
         rows.append((row.id, text.strip()))
-        print row.id, text.strip()
+        # print row.id, text.strip()
     return rows
 
 
@@ -309,12 +310,12 @@ def clustering():
         docs_splitted.append(post_words)
 
         docs_to_post_id[len(docs_splitted) - 1] = post_id
-        print "Vector idx: ", idx, \
-              "Post id: ", post_id, \
-              " : ", " ".join(post_words)
+        # print "Vector idx: ", idx, \
+        #      "Post id: ", post_id, \
+        #      " : ", " ".join(post_words)
         idx += 1
     t2 = millis()
-    print 'Posts splitted in %d ms' % (t2 - t1)
+    print len(docs_splitted), 'posts splitted in ', (t2 - t1), ' ms'
 
     print 'tf-idf started'
     t1 = millis()
@@ -417,6 +418,7 @@ def clustering():
         # and exp(-7200) ~ 0.0, and we need a valid metric for more than 2 hours
         # cluster_score = math.exp(-(current_time - min_epoch)/(60*60))*math.log(len(cluster_posts))
 
+        # TODO: Make scoring exactly the same as in the paper
         # alpha e faktor moze da se menuva i spored nego kje se gleda kolku vlijae starosta
         alpha = 1
         time_now = time.time()
@@ -438,23 +440,24 @@ def clustering():
         if last_id == -1:   # Get next cluster_ids with one select
             last_id = db().select(db.cluster.ALL).last().id
 
-        print last_id, ' : ',
-        # Update cluster value, unavoidable
+        # print last_id, ' : ',
+        # Update cluster id
         for post_id in cluster_posts:
             db(db.posts.id == post_id).update(cluster=last_id)
-            print post_id,
+            # print post_id,
 
         result[last_id] = (cluster_score, master_id, cluster_category, cluster_posts)
-        print
+        # print
         last_id += 1
 
     t2 = millis()
     print 'Inserting clusters finished in %d ms' % (t2 - t1)
 
-    # Return only the newly formed clusters, FOR DEBUG PURPOSES
-    # x[1] is the value, x[1][0] is the first element of the value: cluster_score
     tc2 = millis()
     print 'Total clustering time: %d ms' % (tc2 - tc1)
+
+    # Return only the newly formed clusters, FOR DEBUG PURPOSES
+    # x[1] is the value, x[1][0] is the first element of the value: cluster_score
     return sorted(result.items(), key=lambda x: x[1][0], reverse=True)
 
 

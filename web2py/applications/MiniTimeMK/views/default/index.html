@@ -20,7 +20,13 @@
                     {{if first:}}
                         <article>
                         <a href="{{=link}}" target="_blank"><img src="{{=image}}" /></a>
-                        <a href="{{=link}}" target="_blank"><h4>{{=title}} <span class="time"> {{=website}} - {{=published}}</span></h4></a>
+                        <a href="{{=link}}" target="_blank">
+                            <h4>
+                                <span class="title">{{=title}}</span></br>
+                                <span class="time"> {{=website}} - {{=published}}</span>
+                                <span class="count">{{=len(posts)}} поврзани вести</span>
+                            </h4>
+                        </a>
                         <p>{{=description}}</p>
                         </article>
                         {{if len(posts) > 1:}}
