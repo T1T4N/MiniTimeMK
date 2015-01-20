@@ -418,20 +418,21 @@ def clustering():
         # and exp(-7200) ~ 0.0, and we need a valid metric for more than 2 hours
         # cluster_score = math.exp(-(current_time - min_epoch)/(60*60))*math.log(len(cluster_posts))
 
-        # TODO: Make scoring exactly the same as in the paper
         # alpha e faktor moze da se menuva i spored nego kje se gleda kolku vlijae starosta
         alpha = 1
         time_now = time.time()
         sum_time = 0.0
+        different_sources = set([])
         for post_id in cluster_posts:
+            different_sources.add(db.posts[post_id].source)
             t = time.mktime(db.posts[post_id].pubdate.timetuple())
-            c = math.exp(- abs(time_now - t) / (60.0 * 60.0))
+            c = math.exp(alpha * (- abs(time_now - t) / (60.0 * 60.0)))
             sum_time += c
 
-        average = alpha * sum_time / len(cluster_posts)
-
-        cluster_score = average * math.log(len(cluster_posts))
-
+        #TODO: After fix with kanal5 change to 10
+        source_entropy = (len(different_sources)*1.0/9) + 1
+        cluster_score = source_entropy * sum_time
+        print cluster_score
         # Insert cluster into database
         db.cluster.insert(score=cluster_score,
                           master_post=master_id,
