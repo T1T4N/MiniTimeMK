@@ -429,10 +429,14 @@ def clustering():
             c = math.exp(alpha * (- abs(time_now - t) / (60.0 * 60.0)))
             sum_time += c
 
-        #TODO: After fix with kanal5 change to 10
-        source_entropy = (len(different_sources)*1.0/9) + 1
+        source_entropy = 1
+        if (len(cluster_posts) > 1):
+	        source_entropy = (len(different_sources)*1.0/len(cluster_posts)) + 1
+        if (len(different_sources) == 1):
+	        source_entropy = 1
         cluster_score = source_entropy * sum_time
         print cluster_score
+
         # Insert cluster into database
         db.cluster.insert(score=cluster_score,
                           master_post=master_id,
