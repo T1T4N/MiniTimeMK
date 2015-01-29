@@ -47,8 +47,42 @@ def get_encoding(soup):
     return ret
 
 
+def parse_mk_month(month):
+    """
+    :param month:
+    :return:
+    """
+    l_month = month.lower()
+    if l_month == u'јануари':
+        return u'01'
+    elif l_month == u'февруари':
+        return u'02'
+    elif l_month == u'март':
+        return u'03'
+    elif l_month == u'април':
+        return u'04'
+    elif l_month == u'мај':
+        return u'05'
+    elif l_month == u'јуни':
+        return u'06'
+    elif l_month == u'јули':
+        return u'07'
+    elif l_month == u'август':
+        return u'08'
+    elif l_month == u'септември':
+        return u'09'
+    elif l_month == u'октомври':
+        return u'10'
+    elif l_month == u'ноември':
+        return u'11'
+    elif l_month == u'декември':
+        return u'12'
+
+    return None
+
+
 def parse_rss_post(entry, soup, feed_options_item):
-    default_date = "2000-01-01 07:58:55"
+    default_date = strftime("%Y-%m-%d %H:%M:%S")
     default_encoding = "utf-8"
 
     item_description = ""
@@ -67,9 +101,32 @@ def parse_rss_post(entry, soup, feed_options_item):
             # TODO: timezone adjustment
             item_pub_date = strftime("%Y-%m-%d %H:%M:%S", entry.published_parsed)
 
-    # TODO: Workaround for Kanal5 missing publish date
+    # BUGFIX: Workaround for Kanal5 missing publish date
     if feed_options_item.source_id == 1:
-        pass
+        import re
+        pattern = re.compile(
+            u'(\d+)\s+([A-Za-zАБВГДЃЕЖЗЅИЈКЛЉМНЊОПРСТЌУФХЦЧЏШабвгдѓежзѕијклљмнњопрстќуфхцчџш]+)\s+(\d+)\s+во (\d+):(\d+)'
+        )
+        html_date = soup.select("div.author-description div.author-text p")
+        if len(html_date) > 0:
+            k5_date = html_date[0].get_text()
+            res = pattern.search(k5_date)
+            if res is not None:
+                month_num = parse_mk_month(res.group(2))
+                if month_num is not None:
+                    d_year = res.group(3)
+                    d_date = res.group(1)
+                    d_hour = res.group(4)
+                    d_min = res.group(5)
+                    item_pub_date = u"{0}-{1}-{2} {3}:{4}:00".format(
+                        d_year,
+                        month_num,
+                        d_date,
+                        d_hour,
+                        d_min
+                    )
+        if item_pub_date is None or item_pub_date == "":
+            item_pub_date = default_date
 
     if feed_options_item.item_rss_description:
         item_description = entry.description
@@ -85,7 +142,11 @@ def parse_rss_post(entry, soup, feed_options_item):
                     item_text += part.get_text() + " "
 
         if feed_options_item.recode:
-            item_text = item_text.encode(soup.original_encoding, errors='ignore')
+            if soup.original_encoding is not None:
+                item_text = item_text.encode(soup.original_encoding, errors='ignore')
+            else:
+                item_text = item_text.encode(default_encoding, errors='ignore')
+
             item_text = item_text.decode(default_encoding, errors='ignore')
 
     if feed_options_item.image_from_rss:

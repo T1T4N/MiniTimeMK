@@ -13,22 +13,33 @@ def millis():
     return int(round(time.time() * 1000))
 
 
-def get_all_posts():
+def get_all_posts(days_ago=2):
     """
     Get all posts from the database.
 
     :return: List containing (post_id, post_text) tuples
     """
-    rows = []
+    import datetime
+    now = datetime.datetime.now()
+    dates = set([])
+    if days_ago is not None and days_ago > 0:
+        dates = set([(now - datetime.timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days_ago+1)])
+
+    delta_rows = []
+    all_rows = []
     # Very important not to have duplicates in the select !
     # TODO: Get only posts from the last 2 days
-    for row in db().select(db.posts.ALL):
+    for row in db().select(db.posts.ALL, orderby=~db.posts.pubdate):
         text = row.text
         text = re.sub('\n', ' ', text)
         text = re.sub('\s+', ' ', text)
-        rows.append((row.id, text.strip()))
-        # print row.id, text.strip()
-    return rows
+        all_rows.append((row.id, text.strip()))
+
+        if row.pubdate.strftime("%Y-%m-%d") in dates:
+            delta_rows.append((row.id, text.strip()))
+            print row.id, row.pubdate
+
+    return delta_rows, all_rows
 
 
 def heap_remove_at_index(heap, idx):
@@ -147,6 +158,7 @@ def merge_texts(tf_dict, idf_dict, i, j, vectors, docs_splitted):
     result = doc_i + doc_j
     docs_splitted.append(result)
 
+    # TODO: Calculate offset with all_docs_splitted size
     merge_id = len(docs_splitted) - 1
     tf_dict[merge_id] = {}
     for term in result:
@@ -290,38 +302,45 @@ def clustering():
     """
 
     tc1 = millis()
-    docs = get_all_posts()  # A list of (post_id, text) tuples
-    docs_splitted = []  # A list of the words of each post
+    recent_docs, all_docs = get_all_posts()  # A list of (post_id, text) tuples
+    all_docs_splitted = []  # A list of the words of each post
+    recent_docs_splitted = []
     vectors = []    # A list for the tf-idf vector of each post
     score_pair = {}     # A dictionary with score -> [(pair_i, pair_j), ...]
     reverse_score_pair = {}     # A dictionary with (pair_i, pair_j) -> score
     heap = []       # A list to be used as heap
     vector_to_post_id = {}  # A helper dictionary for mapping between relative vector indexes and post_id
-    docs_to_post_id = {}    # A helper dictionary for mapping between relative docs_splitted indexes and post_id
+    docs_to_post_id = {}    # A helper dictionary for mapping between relative all_docs_splitted indexes and post_id
 
-    limit = len(docs)  # 600
+    limit = len(all_docs)  # 600
     threshold = 0.421
 
     print 'Posts splitting started'
     t1 = millis()
     idx = 0
-    for (post_id, post_text) in docs[:limit]:
+    for (post_id, post_text) in all_docs[:limit]:
         post_words = post_text.split(' ')
-        docs_splitted.append(post_words)
+        all_docs_splitted.append(post_words)
 
-        docs_to_post_id[len(docs_splitted) - 1] = post_id
+        docs_to_post_id[len(all_docs_splitted) - 1] = post_id
         # print "Vector idx: ", idx, \
         #      "Post id: ", post_id, \
         #      " : ", " ".join(post_words)
         idx += 1
     t2 = millis()
-    print len(docs_splitted), 'posts splitted in ', (t2 - t1), ' ms'
+
+    idx = 0
+    for (post_id, post_text) in recent_docs:
+        post_words = post_text.split(' ')
+        recent_docs_splitted.append(post_words)
+        idx += 1
+    print len(all_docs_splitted), 'posts splitted in ', (t2 - t1), ' ms'
 
     print 'tf-idf started'
     t1 = millis()
     tf_dict = {}
     idf_dict = {}
-    for i, doc_words in enumerate(docs_splitted):
+    for i, doc_words in enumerate(all_docs_splitted):
         doc_id = i  # docs_to_post_id[i]
         if tf_dict.get(doc_id, -1) != -1:
             print "ERROR, not empty initial"
@@ -334,12 +353,14 @@ def clustering():
     t2 = millis()
     print "tf-idf dictionaries created in %d ms" % (t2 - t1)
 
-    for i in range(len(docs_splitted)):
-        ret = tf_idf(tf_dict, idf_dict, i, docs_splitted[i], docs_splitted)
+    # TODO: use only recent_docs
+    for i in range(len(all_docs_splitted)):
+        ret = tf_idf(tf_dict, idf_dict, i, all_docs_splitted[i], all_docs_splitted)
         vectors.append(ret)
         vector_to_post_id[len(vectors) - 1] = docs_to_post_id[i]
     t2 = millis()
     print 'tf-idf finished in %d ms (with dict creation included)' % (t2 - t1)
+
 
     print 'Initial heap filling started'
     t1 = millis()
@@ -350,7 +371,7 @@ def clustering():
     print 'HAC started'
     t1 = millis()
     result = hac(tf_dict, idf_dict, heap, vectors, score_pair, reverse_score_pair,
-                 docs_splitted, vector_to_post_id, threshold)
+                 all_docs_splitted, vector_to_post_id, threshold)
     t2 = millis()
     print 'HAC finished in %d ms' % (t2 - t1)
 
@@ -392,7 +413,12 @@ def clustering():
             # Count number of posts for each category
             cluster_categories[post_category] = cluster_categories.get(post_category, 0) + 1
 
-            post_date = post_row.pubdate.timetuple()
+            if post_row.pubdate is not None:
+                post_date = post_row.pubdate.timetuple()
+            else:
+                print "Datetime error occurred on post: ", post_id
+                post_date = time.localtime()
+
             post_epoch = time.mktime(post_date)
             if post_epoch < min_epoch:  # The master-post is the oldest in the cluster
                 min_epoch = post_epoch
@@ -430,10 +456,10 @@ def clustering():
             sum_time += c
 
         source_entropy = 1
-        if (len(cluster_posts) > 1):
-	        source_entropy = (len(different_sources)*1.0/len(cluster_posts)) + 1
-        if (len(different_sources) == 1):
-	        source_entropy = 1
+        if len(cluster_posts) > 1:
+            source_entropy = (len(different_sources)*1.0/len(cluster_posts)) + 1
+        if len(different_sources) == 1:
+            source_entropy = 1
         cluster_score = source_entropy * sum_time
         print cluster_score
 

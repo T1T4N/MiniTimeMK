@@ -14,13 +14,13 @@ if not request.env.web2py_runtime_gae:
     # db = DAL('sqlite://storage.sqlite',pool_size=1,check_reserved=['all'])
     db = DAL('mysql://root:@localhost/timemk')
 
-    db.define_table('categories', Field('category'), Field('factor'), Field('static_name'), fake_migrate=True)
+    db.define_table('categories', Field('category'), Field('factor'), Field('static_name'))#, fake_migrate=True)
     db.define_table('posts', Field('link'), Field('cluster'), Field('category'), Field('source'), Field('title'),
-                    Field('text'), Field('description'), Field('imageurl'), Field('pubdate'), fake_migrate=True)
-    db.define_table('rssfeeds', Field('source'), Field('category'), Field('feed'), Field("recode"), fake_migrate=True)
+                    Field('text'), Field('description'), Field('imageurl'), Field('pubdate'))#, fake_migrate=True)
+    db.define_table('rssfeeds', Field('source'), Field('category'), Field('feed'), Field("recode"))#, fake_migrate=True)
     db.define_table('sources', Field('website'),  Field('contentFlag'),  Field('contentselector'),
-                    Field('imageFlag'), Field('imageselector'), fake_migrate=True)
-    db.define_table('cluster', Field('score'), Field('master_post'), Field('category'), Field('size'), fake_migrate=True)
+                    Field('imageFlag'), Field('imageselector'))#, fake_migrate=True)
+    db.define_table('cluster', Field('score'), Field('master_post'), Field('category'), Field('size'))#, fake_migrate=True)
 else:
     ## connect to Google BigTable (optional 'google:datastore://namespace')
     db = DAL('google:datastore+ndb')
@@ -57,7 +57,7 @@ service = Service()
 plugins = PluginManager()
 
 ## create all tables needed by auth if not custom tables
-auth.define_tables(username=False, signature=False, fake_migrate=True)
+auth.define_tables(username=False, signature=False)#, fake_migrate=True)
 
 ## configure email
 mail = auth.settings.mailer
