@@ -25,11 +25,10 @@ def get_html(entry, feed_options_item, queue):
     :param queue: The queue where to store the result
     """
     try:
-        #r = urllib2.Request(url=entry.link.encode("utf-8"), headers={'Connection': 'Keep-Alive'})
         entry_html = urllib.urlopen(entry.link.encode("utf-8")).read()
         queue.put((entry, "".join(entry_html), feed_options_item))
     except IOError as e:
-        print "ERROR: ", e, e.strerror
+        print "ERROR runtime: ", e, e.strerror
     except RuntimeError as e:
         print "ERROR runtime: ", e.strerror
 
@@ -237,7 +236,7 @@ def rss_extract_items(feeds_list):
     t1 = millis()
 
     f_limit = 5     # Number of feeds to process in parallel
-    t_limit = 15    # Number of posts to process in parallel in each feed
+    t_limit = 13    # Number of posts to process in parallel in each feed
     print f_limit, "feed threads with", t_limit, "post threads"
     threads = [threading.Thread(target=parse_feed_parallel,
                                 args=(i, feed_options_item, raw_links, items, t_limit))

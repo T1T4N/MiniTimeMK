@@ -218,15 +218,15 @@ def merge_texts(tf_dict, idf_dict, i, j, vectors, all_docs_splitted, recent_docs
         and the index at which the merged text was inserted
     """
 
-    doc_i = all_docs_splitted[i]
+    doc_i = recent_docs_splitted[i]
     vec_i = vectors[i]
 
-    doc_j = all_docs_splitted[j]
+    doc_j = recent_docs_splitted[j]
     vec_j = vectors[j]
 
     result = doc_i + doc_j
     recent_docs_splitted.append(result)
-    all_docs_splitted.append(result)
+    # all_docs_splitted.append(result)
 
     merge_id = len(recent_docs_splitted) - 1
 
