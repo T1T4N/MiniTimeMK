@@ -37,7 +37,7 @@ def get_all_posts(days_ago=2):
 
         if row.pubdate.strftime("%Y-%m-%d") in dates:
             delta_rows.append((row.id, text.strip()))
-            print row.id, row.pubdate
+            # print row.id, row.pubdate
 
     return delta_rows, all_rows
 
@@ -70,12 +70,12 @@ def heap_remove_element(heap, element):
     heap_remove_at_index(heap, index)
 
 
-def tf_idf(tf_dict, idf_dict, doc_id, document, docs_splitted, terms_set=None):
+def tf_idf(tf_dict, idf_dict, doc_id, document, all_docs_splitted, terms_set=None):
     """
     Calculates the top 12 tf-idf keywords of a document.
 
     :param document: The document whose tf-idf should be calculated, represented as a string list
-    :param docs_splitted: A list of the documents' words represented as string lists
+    :param all_docs_splitted: A list of the documents' words represented as string lists
     :param terms_set: An optional set of terms for which to calculate tf_idf
         If None, tf_idf is calculated for every word in the document
     :return: A dictionary of the 12 tf-idf keywords and their weights,
@@ -88,7 +88,7 @@ def tf_idf(tf_dict, idf_dict, doc_id, document, docs_splitted, terms_set=None):
     tokens = {}
     for term in terms:
         tf = (1.0 * tf_dict[doc_id].get(term, 0) / len(document))
-        idf = math.log(1.0 * len(docs_splitted) / (len(idf_dict.get(term, [])) + 1))
+        idf = math.log(1.0 * len(all_docs_splitted) / (len(idf_dict.get(term, [])) + 1))
 
         weight = tf*idf
         tokens[term] = weight
@@ -138,42 +138,6 @@ def cosine_similarity(d1, d2):
     return 1.0 * upper_sum / (normalization_sum1 * normalization_sum2)
 
 
-def merge_texts(tf_dict, idf_dict, i, j, vectors, docs_splitted):
-    """
-    Merges the string contents of two documents, and calculates the top 12 keywords.
-
-    :param doc1: A list containing the words of the first document
-    :param doc2: A list containing the words of the second document
-    :param docs_splitted: A list containing the words of all documents
-    :return: The top 12 tf-idf keywords of the merged document
-        and the index at which the merged text was inserted
-    """
-
-    doc_i = docs_splitted[i]
-    vec_i = vectors[i]
-
-    doc_j = docs_splitted[j]
-    vec_j = vectors[j]
-
-    result = doc_i + doc_j
-    docs_splitted.append(result)
-
-    # TODO: Calculate offset with all_docs_splitted size
-    merge_id = len(docs_splitted) - 1
-    tf_dict[merge_id] = {}
-    for term in result:
-        tf_dict[merge_id][term] = tf_dict[merge_id].get(term, 0) + 1
-        idf_dict[term] = idf_dict.get(term, set([]))
-        idf_dict[term].add(merge_id)
-
-    max_set = set([])
-    max_set.update(vec_i.keys())
-    max_set.update(vec_j.keys())
-
-    ret = tf_idf(tf_dict, idf_dict, merge_id, result, docs_splitted, max_set)
-    return merge_id, ret
-
-
 def init_fill_heap(vectors, score_pair, reverse_score_pair, heap, threshold):
     """
     Initial calculation of similarity for each pair of tf-idf vectors.
@@ -202,7 +166,7 @@ def init_fill_heap(vectors, score_pair, reverse_score_pair, heap, threshold):
                 score_pair[score] = score_pair.get(score, [])
                 score_pair[score].append((i, j))
 
-                # TODO: (i, k) -> float pair, instead of list
+                # TODO: (i, j) -> float pair, instead of list
                 reverse_score_pair[(i, j)] = reverse_score_pair.get((i, j), []) + [score]
                 heapq.heappush(heap, score*(-1))
 
@@ -243,7 +207,46 @@ def get_most_similar(score_pair, reverse_score_pair, heap):
     return result_i, result_j
 
 
-def hac(tf_dict, idf_dict, heap, vectors, score_pair, reverse_score_pair, docs_splitted, vector_id_map, threshold):
+def merge_texts(tf_dict, idf_dict, i, j, vectors, all_docs_splitted, recent_docs_splitted, offset):
+    """
+    Merges the string contents of two documents, and calculates the top 12 keywords.
+
+    :param doc1: A list containing the words of the first document
+    :param doc2: A list containing the words of the second document
+    :param all_docs_splitted: A list containing the words of all documents
+    :return: The top 12 tf-idf keywords of the merged document
+        and the index at which the merged text was inserted
+    """
+
+    doc_i = all_docs_splitted[i]
+    vec_i = vectors[i]
+
+    doc_j = all_docs_splitted[j]
+    vec_j = vectors[j]
+
+    result = doc_i + doc_j
+    recent_docs_splitted.append(result)
+    all_docs_splitted.append(result)
+
+    merge_id = len(recent_docs_splitted) - 1
+
+    tf_dict[merge_id + offset] = {}
+    for term in result:
+        tf_dict[merge_id + offset][term] = tf_dict[merge_id + offset].get(term, 0) + 1
+        # TODO: idf shouldn't be changed ?
+        # idf_dict[term] = idf_dict.get(term, set([]))
+        # idf_dict[term].add(merge_id + offset)
+
+    max_set = set([])
+    max_set.update(vec_i.keys())
+    max_set.update(vec_j.keys())
+
+    ret = tf_idf(tf_dict, idf_dict, merge_id + offset, result, all_docs_splitted, max_set)
+    return merge_id, ret
+
+
+def hac(tf_dict, idf_dict, heap, vectors, score_pair, reverse_score_pair,
+        all_docs_splitted, recent_docs_splitted, vector_id_map, threshold, offset):
     """
     Performs Hierarchical Agglomerative Clustering on the given posts.
 
@@ -251,7 +254,7 @@ def hac(tf_dict, idf_dict, heap, vectors, score_pair, reverse_score_pair, docs_s
     :param vectors: A list containing the 12 tf-idf keywords of the posts
     :param score_pair: A dictionary containing score : pair key-value pairs
     :param reverse_score_pair: A reverse dictionary of score_pair (simVec) containing pair : score key-value pairs
-    :param docs_splitted: A list of the words of each post
+    :param all_docs_splitted: A list of the words of each post
     :param vector_id_map
     :param threshold A decimal threshold above which clusters are merged
     :return: A dictionary containing cluster_id -> (id, id) pairs
@@ -266,7 +269,7 @@ def hac(tf_dict, idf_dict, heap, vectors, score_pair, reverse_score_pair, docs_s
         deleted.add(result_j)
 
         merge_id, merged_vector = merge_texts(tf_dict, idf_dict, result_i, result_j,
-                                              vectors, docs_splitted)
+                                              vectors, all_docs_splitted, recent_docs_splitted, offset)
         vectors.append(merged_vector)
         vector_id_map[len(vectors) - 1] = merge_id
 
@@ -274,6 +277,9 @@ def hac(tf_dict, idf_dict, heap, vectors, score_pair, reverse_score_pair, docs_s
             if i not in deleted:
                 d1 = vectors[i]
                 score = cosine_similarity(d1, merged_vector)
+
+                if k != merge_id:
+                    print "k != merge_id", k, merge_id, merge_id - offset
 
                 if score > 1.0:
                     print 'Score bigger than 1: %f' % score
@@ -291,6 +297,19 @@ def hac(tf_dict, idf_dict, heap, vectors, score_pair, reverse_score_pair, docs_s
         k += 1
         hash_merged[merge_id] = (result_i, result_j)
     return hash_merged
+
+
+def get_children_clusters(result_dict, key, eliminated):
+    ret = []
+    eliminated.add(key)
+    if result_dict.get(key, None) is None:
+        ret.append(key)
+    else:
+        for c_id in result_dict[key]:
+            if c_id not in eliminated:
+                # eliminated.add(c_id)
+                ret += get_children_clusters(result_dict, c_id, eliminated)
+    return ret
 
 
 def clustering():
@@ -323,9 +342,7 @@ def clustering():
         all_docs_splitted.append(post_words)
 
         docs_to_post_id[len(all_docs_splitted) - 1] = post_id
-        # print "Vector idx: ", idx, \
-        #      "Post id: ", post_id, \
-        #      " : ", " ".join(post_words)
+
         idx += 1
     t2 = millis()
 
@@ -333,6 +350,10 @@ def clustering():
     for (post_id, post_text) in recent_docs:
         post_words = post_text.split(' ')
         recent_docs_splitted.append(post_words)
+
+        # print "Vector idx: ", idx, \
+        #       "Post id: ", post_id, \
+        #       " : ", " ".join(post_words)
         idx += 1
     print len(all_docs_splitted), 'posts splitted in ', (t2 - t1), ' ms'
 
@@ -340,8 +361,16 @@ def clustering():
     t1 = millis()
     tf_dict = {}
     idf_dict = {}
+
+    # To use all posts: recent_docs_splitted = [a for a in all_docs_splitted]
+    recent_len = len(recent_docs_splitted)
+    offset = len(all_docs_splitted)
+
     for i, doc_words in enumerate(all_docs_splitted):
         doc_id = i  # docs_to_post_id[i]
+        if doc_id >= 0 and doc_id < recent_len:
+            doc_id += offset
+
         if tf_dict.get(doc_id, -1) != -1:
             print "ERROR, not empty initial"
 
@@ -353,14 +382,12 @@ def clustering():
     t2 = millis()
     print "tf-idf dictionaries created in %d ms" % (t2 - t1)
 
-    # TODO: use only recent_docs
-    for i in range(len(all_docs_splitted)):
-        ret = tf_idf(tf_dict, idf_dict, i, all_docs_splitted[i], all_docs_splitted)
+    for i in range(len(recent_docs_splitted)):
+        ret = tf_idf(tf_dict, idf_dict, i + offset, recent_docs_splitted[i], all_docs_splitted)
         vectors.append(ret)
         vector_to_post_id[len(vectors) - 1] = docs_to_post_id[i]
     t2 = millis()
     print 'tf-idf finished in %d ms (with dict creation included)' % (t2 - t1)
-
 
     print 'Initial heap filling started'
     t1 = millis()
@@ -371,7 +398,7 @@ def clustering():
     print 'HAC started'
     t1 = millis()
     result = hac(tf_dict, idf_dict, heap, vectors, score_pair, reverse_score_pair,
-                 all_docs_splitted, vector_to_post_id, threshold)
+                 all_docs_splitted, recent_docs_splitted, vector_to_post_id, threshold, offset)
     t2 = millis()
     print 'HAC finished in %d ms' % (t2 - t1)
 
@@ -396,6 +423,7 @@ def clustering():
     # Empty cluster table and reset id
     db(db.cluster).delete()
     db.executesql("ALTER TABLE cluster AUTO_INCREMENT=1")
+    db.commit()
 
     for key in sorted(final_dict, reverse=True):
         cluster_posts = []
@@ -461,7 +489,7 @@ def clustering():
         if len(different_sources) == 1:
             source_entropy = 1
         cluster_score = source_entropy * sum_time
-        print cluster_score
+        # print cluster_score
 
         # Insert cluster into database
         db.cluster.insert(score=cluster_score,
@@ -471,14 +499,14 @@ def clustering():
         if last_id == -1:   # Get next cluster_ids with one select
             last_id = db().select(db.cluster.ALL).last().id
 
-        # print last_id, ' : ',
+        print last_id, ' : ',
         # Update cluster id
         for post_id in cluster_posts:
             db(db.posts.id == post_id).update(cluster=last_id)
-            # print post_id,
+            print post_id,
+        print
 
         result[last_id] = (cluster_score, master_id, cluster_category, cluster_posts)
-        # print
         last_id += 1
 
     t2 = millis()
@@ -490,16 +518,3 @@ def clustering():
     # Return only the newly formed clusters, FOR DEBUG PURPOSES
     # x[1] is the value, x[1][0] is the first element of the value: cluster_score
     return sorted(result.items(), key=lambda x: x[1][0], reverse=True)
-
-
-def get_children_clusters(result_dict, key, eliminated):
-    ret = []
-    eliminated.add(key)
-    if result_dict.get(key, None) is None:
-        ret.append(key)
-    else:
-        for c_id in result_dict[key]:
-            if c_id not in eliminated:
-                # eliminated.add(c_id)
-                ret += get_children_clusters(result_dict, c_id, eliminated)
-    return ret

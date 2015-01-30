@@ -16,7 +16,7 @@ import urllib
 import threading
 
 
-def get_html(entry, queue):
+def get_html(entry, feed_options_item, queue):
     """
     Extracts the html of the page specified with url and puts it in a queue.
     Intended for parallelized usage.
@@ -25,10 +25,11 @@ def get_html(entry, queue):
     :param queue: The queue where to store the result
     """
     try:
+        #r = urllib2.Request(url=entry.link.encode("utf-8"), headers={'Connection': 'Keep-Alive'})
         entry_html = urllib.urlopen(entry.link.encode("utf-8")).read()
-        queue.put((entry, "".join(entry_html)))
+        queue.put((entry, "".join(entry_html), feed_options_item))
     except IOError as e:
-        print "ERROR: ", e.strerror
+        print "ERROR: ", e, e.strerror
     except RuntimeError as e:
         print "ERROR runtime: ", e.strerror
 
@@ -81,7 +82,8 @@ def parse_mk_month(month):
     return None
 
 
-def parse_rss_post(entry, soup, feed_options_item):
+def parse_rss_post(entry, html, feed_options_item):
+    soup = BeautifulSoup(html)
     default_date = strftime("%Y-%m-%d %H:%M:%S")
     default_encoding = "utf-8"
 
@@ -189,18 +191,19 @@ def parse_feed_parallel(num, feed_options_item, all_links, queue, t_limit=None):
     print 'Extracting feed: ', num, feed_options_item.feed_url
     d = feedparser.parse(feed_options_item.feed_url)
 
-    # Used to hold the resulting HTML strings
-    entries = Queue()   # Queue is thread-safe
-
     # Create a thread for each entry in the feed which is not present in the database
     threads = []
     for entry in d.entries:
         if 'feedproxy.google' in entry.link:    # Feedproxy workaround
             if entry.get("feedburner_origlink", entry.link) not in all_links:
-                threads.append(threading.Thread(target=get_html, args=(entry, entries)))
+                threads.append(threading.Thread(target=get_html, args=(entry, feed_options_item, queue)))
+                # Adds link in case there is a duplicate entry in the new ones
+                all_links.add(entry.get("feedburner_origlink", entry.link))
         else:
             if entry.link not in all_links:
-                threads.append(threading.Thread(target=get_html, args=(entry, entries)))
+                threads.append(threading.Thread(target=get_html, args=(entry, feed_options_item, queue)))
+                # Adds link in case there is a duplicate entry in the new ones
+                all_links.add(entry.link)
 
     # Run threads depending on thread limit
     if t_limit:
@@ -210,26 +213,12 @@ def parse_feed_parallel(num, feed_options_item, all_links, queue, t_limit=None):
             for j in range(min(t_limit, len(threads) - i)):
                 threads[i+j].join()
 
-            # Run t_limit post threads, wait for them to finish, process the posts
-            while not entries.empty():
-                (entry, html) = entries.get_nowait()
-                soup = BeautifulSoup(html)
-
-                rss_post = parse_rss_post(entry, soup, feed_options_item)
-                queue.put(rss_post)
     else:
         # If t_limit is None, run all post threads at once
         for t in threads:
             t.start()
         for t in threads:
             t.join()
-
-        while not entries.empty():
-            (entry, html) = entries.get_nowait()
-            soup = BeautifulSoup(html)
-
-            rss_post = parse_rss_post(entry, soup, feed_options_item)
-            queue.put(rss_post)
 
 
 def rss_extract_items(feeds_list):
@@ -247,7 +236,7 @@ def rss_extract_items(feeds_list):
     print 'Parallel fetch started', len(feeds_list), 'feeds'
     t1 = millis()
 
-    f_limit = 6     # Number of feeds to process in parallel
+    f_limit = 5     # Number of feeds to process in parallel
     t_limit = 15    # Number of posts to process in parallel in each feed
     print f_limit, "feed threads with", t_limit, "post threads"
     threads = [threading.Thread(target=parse_feed_parallel,
@@ -259,20 +248,18 @@ def rss_extract_items(feeds_list):
             threads[i+j].start()
         for j in range(min(f_limit, len(threads) - i)):
             threads[i+j].join()
-    """
-    for i, feed_options_item in enumerate(feeds_list):
-        parse_feed_parallel(i, feed_options_item, raw_links, items, None)
-    """
+
     t2 = millis()
     print "Parallel: feeds processed in %d ms" % (t2-t1)
 
     print items.qsize(), "posts",
     t1 = millis()
     while not items.empty():
-        rss_post = items.get_nowait()
+        (entry, html, feed_options_item) = items.get_nowait()
+        rss_post = parse_rss_post(entry, html, feed_options_item)
         rss_post.db_insert()
     t2 = millis()
-    print "inserted in: %d ms" % (t2 - t1)
+    print "processed and inserted in: %d ms" % (t2 - t1)
 
 
 def update():
@@ -338,7 +325,7 @@ def index():
 
     for category in category_list:
         category_entries.append((category.id, category.category))
-        clusters = db(category.id == db.cluster.category).select(db.cluster.ALL, orderby=~db.cluster.score)
+        clusters = db(db.cluster.category == category.id).select(db.cluster.ALL, orderby=~db.cluster.score)
         cluster_len = 3 if req_category is None else len(clusters)
         # print "Category: ", category.id, category.category
 
