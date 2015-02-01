@@ -2,8 +2,8 @@
 from datetime import datetime
 from time import strftime
 from Queue import Queue
-from bs4 import BeautifulSoup
-import gluon.contrib.feedparser as feedparser
+from pyquery import PyQuery as pq
+from lxml import etree
 import os
 import time
 import speedparser
@@ -11,6 +11,9 @@ import re
 import urllib3
 import urllib
 import threading
+import logging
+logger = logging.getLogger("MiniTimeMK")
+logger.setLevel(logging.DEBUG)
 
 
 def days_between(days):
@@ -80,7 +83,7 @@ def create_static_page(page_name, pages_url, categories, cluster_entries, post_e
     :param post_entries: The posts for the specified clusters
     """
 
-    print 'Generating static page: ', page_name
+    logger.info('Generating static page: %s' % page_name)
 
     f = open(os.path.dirname(__file__) + os.sep +
              ".." + os.sep +
@@ -323,8 +326,7 @@ def generate_static():
         t.join()
 
     t2 = millis()
-    print
-    print 'Generating static pages: %d ms' % (t2 - t1)
+    logger.info('Generating static pages: %d ms' % (t2 - t1))
 
 
 def get_html3(pool_manager, entry, feed_options_item, queue):
@@ -337,12 +339,18 @@ def get_html3(pool_manager, entry, feed_options_item, queue):
     """
 
     try:
-        r = pool_manager.request('GET', entry.link.encode("utf-8"))
+        l = entry.link.encode("utf-8")
+        # Bug fix: HTTPConnectionPool uses urls relative to the host
+        m = l[l.find('/', 8):]  # Find first occurrence of / after http:// part
+        r = pool_manager.request('GET', m, retries=False)
+
         queue.put((entry, "".join(r.data), feed_options_item))
+    except urllib3.exceptions.MaxRetryError as e:
+        logger.error("MaxRetryError: %s" % e)
     except IOError as e:
-        print "IO ERROR:", e, e.strerror
+        logger.error("IOError: %s" % e)
     except RuntimeError as e:
-        print "Runtime ERROR:", e.strerror
+        logger.error("RuntimeError:" % e)
 
 
 def parse_mk_month(month):
@@ -380,101 +388,116 @@ def parse_mk_month(month):
 
 
 def parse_rss_post(entry, html, feed_options_item):
-    soup = BeautifulSoup(html)
-    default_date = strftime("%Y-%m-%d %H:%M:%S")
-    default_encoding = "utf-8"
+    try:
+        soup = pq(etree.HTML(html))
 
-    item_description = ""
-    item_text = ""
-    image_url = ""
+        default_date = strftime("%Y-%m-%d %H:%M:%S")
+        default_encoding = "utf-8"
 
-    item_link = entry.link
-    if 'feedproxy.google' in item_link:     # Feedproxy workaround
-        item_link = entry.get("id", item_link)      # SpeedParser specific
-        # item_link = entry.get("feedburner_origlink", item_link)
+        item_description = ""
+        item_text = ""
+        image_url = ""
 
-    # SpeedParser changes: uses "updated" instead of "published"
-    item_pub_date = entry.get("updated", default_date)   # default
-    if item_pub_date != default_date:
-        if entry.updated_parsed is None or entry.updated_parsed == "":
-            item_pub_date = default_date
-        else:
-            # TODO: timezone adjustment
-            item_pub_date = strftime("%Y-%m-%d %H:%M:%S", entry.updated_parsed)
+        item_link = entry.link
+        if 'feedproxy.google' in item_link:     # FeedProxy workaround
+            item_link = entry.get("id", item_link)      # SpeedParser specific
+            # item_link = entry.get("feedburner_origlink", item_link)
 
-    # Bug fix: Workaround for Kanal5 missing publish date
-    if feed_options_item.source_id == 1:
-        pattern = re.compile(
-            u'(\d+)\s+([A-Za-zАБВГДЃЕЖЗЅИЈКЛЉМНЊОПРСТЌУФХЦЧЏШабвгдѓежзѕијклљмнњопрстќуфхцчџш]+)\s+(\d+)\s+во (\d+):(\d+)'
-        )
-        html_date = soup.select("div.author-description div.author-text p")
-        if len(html_date) > 0:
-            k5_date = html_date[0].get_text()
-            res = pattern.search(k5_date)
-            if res is not None:
-                month_num = parse_mk_month(res.group(2))
-                if month_num is not None:
-                    d_year = res.group(3)
-                    d_date = res.group(1)
-                    d_hour = res.group(4)
-                    d_min = res.group(5)
-                    item_pub_date = u"{0}-{1}-{2} {3}:{4}:00".format(
-                        d_year,
-                        month_num,
-                        d_date,
-                        d_hour,
-                        d_min
-                    )
-        if item_pub_date is None or item_pub_date == "":
-            item_pub_date = default_date
-
-    if feed_options_item.item_rss_description:
-        item_description = entry.description
-
-    if feed_options_item.content_from_rss:
-        item_text = entry[feed_options_item.content_rss_tag]
-    else:
-        selectors = feed_options_item.content_css_selector.split(",")
-        for selector in selectors:
-            content_entries = soup.select(selector)
-            if len(content_entries) > 0:
-                for part in content_entries:
-                    item_text += part.get_text() + " "
-
-        if feed_options_item.recode:
-            # Bug fix: Original encoding might not be present
-            if soup.original_encoding is not None:
-                item_text = item_text.encode(soup.original_encoding, errors='ignore')
+        # SpeedParser changes: uses "updated" instead of "published"
+        item_pub_date = entry.get("updated", default_date)   # default
+        if item_pub_date != default_date:
+            if entry.updated_parsed is None or entry.updated_parsed == "":
+                item_pub_date = default_date
             else:
-                item_text = item_text.encode(default_encoding, errors='ignore')
+                # TODO: timezone adjustment
+                item_pub_date = strftime("%Y-%m-%d %H:%M:%S", entry.updated_parsed)
 
-            item_text = item_text.decode(default_encoding, errors='ignore')
+        # Bug fix: Workaround for Kanal5 missing publish date
+        if feed_options_item.source_id == 1:
+            pattern = re.compile(
+                u'(\d+)\s+([A-Za-zАБВГДЃЕЖЗЅИЈКЛЉМНЊОПРСТЌУФХЦЧЏШабвгдѓежзѕијклљмнњопрстќуфхцчџш]+)\s+(\d+)\s+во (\d+):(\d+)'
+            )
+            html_date = soup("div.author-description div.author-text p")
+            if len(html_date) > 0:
+                # k5_date = html_date[0].get_text()
+                k5_date = pq(html_date[0]).text()
+                res = pattern.search(k5_date)
+                if res is not None:
+                    month_num = parse_mk_month(res.group(2))
+                    if month_num is not None:
+                        d_year = res.group(3)
+                        d_date = res.group(1)
+                        d_hour = res.group(4)
+                        d_min = res.group(5)
+                        item_pub_date = u"{0}-{1}-{2} {3}:{4}:00".format(
+                            d_year,
+                            month_num,
+                            d_date,
+                            d_hour,
+                            d_min
+                        )
+            if item_pub_date is None or item_pub_date == "":
+                item_pub_date = default_date
 
-    if feed_options_item.image_from_rss:
-        image_url = entry[feed_options_item.image_rss_tag]
-    else:
-        image_entries = soup.select(feed_options_item.image_css_selector)
-        if len(image_entries) > 0:  # May not contain image
-            image_url = image_entries[0]["src"]
+        if feed_options_item.item_rss_description:
+            item_description = entry.description
 
-    """
-    Regex cleaning here
-    """
-    item_filtered_text = item_text.lower()
-    for (regex_expr, output_fmt) in feed_options_item.clean_regex:
-        item_filtered_text = re.sub(regex_expr, output_fmt, item_filtered_text)
+        if feed_options_item.content_from_rss:
+            item_text = entry[feed_options_item.content_rss_tag]
+        else:
+            selectors = feed_options_item.content_css_selector.split(",")
+            for selector in selectors:
+                content_entries = soup(selector)
+                if len(content_entries) > 0:
+                    for part in content_entries:
+                        part_text = pq(part).text()
+                        if part_text is not None:
+                            item_text += part_text + " "
 
-    rss_post = RSSPost(page_url=item_link,
-                       category=feed_options_item.category,
-                       source=feed_options_item.source_id,
-                       pub_date=item_pub_date,
-                       item_title=entry.title,
-                       item_content=item_text,
-                       item_filtered_content=item_filtered_text,
-                       item_description=item_description,
-                       item_image_url=image_url)
-    # rss_post.db_insert()
-    return rss_post
+            if item_text.strip() == "":
+                return None     # If no text, don't insert in db
+
+            if feed_options_item.recode:
+                # Bug fix: Original encoding might not be present
+                if soup.encoding is not None:
+                    # Workaround for non utf-8 encoding found in Kurir
+                    # Search for cyrillic letter 'a' and if text is junk it won't be found
+                    if feed_options_item.source_id == 5 and item_text.find(u'\u0430') == -1:
+                        item_text = item_text.encode('iso-8859-1', errors='ignore')
+                    else:
+                        item_text = item_text.encode(soup.encoding, errors='ignore')
+                else:
+                    item_text = item_text.encode(default_encoding, errors='ignore')
+
+                item_text = item_text.decode(default_encoding, errors='ignore')
+
+        if feed_options_item.image_from_rss:
+            image_url = entry[feed_options_item.image_rss_tag]
+        else:
+            image_entries = soup(feed_options_item.image_css_selector)
+            if len(image_entries) > 0:  # May not contain image
+                image_url = pq(image_entries[0]).attr("src")
+
+        """
+        Regex cleaning here
+        """
+        item_filtered_text = item_text.lower()
+        for (regex_expr, output_fmt) in feed_options_item.clean_regex:
+            item_filtered_text = re.sub(regex_expr, output_fmt, item_filtered_text)
+
+        rss_post = RSSPost(page_url=item_link,
+                           category=feed_options_item.category,
+                           source=feed_options_item.source_id,
+                           pub_date=item_pub_date,
+                           item_title=entry.title,
+                           item_content=item_text,
+                           item_filtered_content=item_filtered_text,
+                           item_description=item_description,
+                           item_image_url=image_url)
+        return rss_post
+    except etree.XMLSyntaxError as e:
+        logger.error("HTML parse error %s %s" % (entry.link, e))
+        return None
 
 
 def parse_feed_parallel(num, feed_options_item, all_links, queue, t_limit=None):
@@ -495,26 +518,25 @@ def parse_feed_parallel(num, feed_options_item, all_links, queue, t_limit=None):
     # d = feedparser.parse(feed_options_item.feed_url)
 
     t2 = millis()
-    print num, feed_options_item.feed_url, 'with', len(d.entries), 'posts done in: ', (t2-t1), "ms"
+    logger.debug("%d %s with %d posts, speedparser done in: %d ms" % (num, feed_options_item.feed_url, len(d.entries), (t2-t1)))
 
     # Create a thread for each entry in the feed which is not present in the database
     threads = []
 
     http = None
-    if 'feedburner' in feed_options_item.feed_url or 'a1on' in feed_options_item.feed_url:
+    if 'feedburner' in feed_options_item.feed_url:
         # Got maxsize=40 experimentally as best value
         # PoolManager automatically handles different hosts
-        # There is a bug with a1on that reports incrorrect host
-        http = urllib3.PoolManager(maxsize=40, block=True)
+        # There is a bug with a1on that reports incorrect host
+        http = urllib3.connection_from_url(d.entries[0].get("id", d.entries[0].link), maxsize=40, block=True)
     else:
         http = urllib3.connection_from_url(feed_options_item.feed_url, maxsize=40, block=True)
 
     # Filling thread list
     for entry in d.entries:
-        if 'feedproxy.google' in entry.link:    # Feedproxy workaround
+        if 'feedproxy.google' in entry.link:    # FeedProxy workaround
             # if entry.get("feedburner_origlink", entry.link) not in all_links:
-            # SpeedParser changes
-            if entry.get("id", entry.link) not in all_links:
+            if entry.get("id", entry.link) not in all_links:    # SpeedParser changes
                 threads.append(threading.Thread(target=get_html3, args=(http, entry, feed_options_item, queue)))
         else:
             if entry.link not in all_links:
@@ -547,14 +569,14 @@ def rss_extract_items(feeds_list):
     all_dbrow_links = db().select(db.posts.link)    # List of Row objects containing the links
     raw_links = set([row.link for row in all_dbrow_links])  # Set of strings containing the links
 
-    print 'Parallel fetch started', len(feeds_list), 'feeds'
+    logger.info('Parallel fetch started on %d feeds' % len(feeds_list))
     items = Queue()
 
     t1 = millis()
     f_limit = 5     # Number of feeds to process in parallel
-    t_limit = 15    # Number of posts to process in parallel in each feed
+    t_limit = 10    # Number of posts to process in parallel in each feed
 
-    print f_limit, "feed threads with", t_limit, "post threads"
+    logger.info("%d feed threads with %d post threads" % (f_limit, t_limit))
     threads = [threading.Thread(target=parse_feed_parallel,
                                 args=(i, feed_options_item, raw_links, items, t_limit))
                for i, feed_options_item in enumerate(feeds_list)]
@@ -565,31 +587,29 @@ def rss_extract_items(feeds_list):
         for j in range(min(f_limit, len(threads) - i)):
             threads[i+j].join()
     t2 = millis()
-    print items.qsize(), "Parallel: feeds processed in %d ms" % (t2-t1)
+    logger.info("Feeds processed in %d ms" % (t2-t1))
 
     # All the posts from all the feeds are put in the items queue
     # After all threads have stopped, we start to parse each post
-
+    num_items = items.qsize()
     t1 = millis()
+    posts = []
     while not items.empty():
         (entry, html, feed_options_item) = items.get_nowait()
         # post_threads.append(threading.Thread(
         #     target=parse_rss_post, args=(entry, html, feed_options_item)
         # ))
-
         rss_post = parse_rss_post(entry, html, feed_options_item)
-        rss_post.db_insert()
-
-    """
-    for i in range(0, len(post_threads), p_limit):
-        for j in range(min(p_limit, len(post_threads) - i)):
-            post_threads[i+j].start()
-        for j in range(min(p_limit, len(post_threads) - i)):
-            post_threads[i+j].join()
-    """
-
+        if rss_post is not None:
+            posts.append(rss_post)
     t2 = millis()
-    print "Posts processed and inserted in: %d ms" % (t2 - t1)
+    logger.info("%d posts processed in %d ms" % (num_items, (t2 - t1)))
+
+    t1 = millis()
+    for rss_post in posts:
+        rss_post.db_insert()
+    t2 = millis()
+    logger.info("Posts inserted in %d ms" % (t2 - t1))
 
 
 def update_site():
@@ -605,7 +625,7 @@ def update_site():
     words_extraction_regex = [(interpunction_regex + word_regex + interpunction_regex, r'\1 ')]
 
     feeds = []
-    rows = db(db.sources.id == db.rssfeeds.source).select(db.rssfeeds.ALL, db.sources.ALL)
+    rows = db(db.sources.id == db.rssfeeds.source).select(db.rssfeeds.ALL, db.sources.ALL, orderby='<random>')
     for row in rows:
         feeds.append(RSSFeedOptions(feed_url=row.rssfeeds.feed,
                                     source_id=row.sources.id,
@@ -620,7 +640,7 @@ def update_site():
     generate_static()
 
     t2 = millis()
-    print 'Total update time: %d ms' % (t2 - t1)
+    logger.info('Total update time: %d ms' % (t2 - t1))
 
-#from gluon.scheduler import Scheduler
-#Scheduler(db, dict(update_task=update_site))
+from gluon.scheduler import Scheduler
+Scheduler(db, dict(update_task=update_site))

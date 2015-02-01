@@ -3,6 +3,9 @@ import heapq
 import math
 import re
 import time
+import logging
+logger = logging.getLogger("MiniTimeMK")
+logger.setLevel(logging.DEBUG)
 
 
 def millis():
@@ -158,7 +161,7 @@ def init_fill_heap(vectors, score_pair, reverse_score_pair, heap, threshold):
             score = cosine_similarity(d1, d2)
 
             if score > 1.0:
-                print 'Score larger than 1: %.30f' % score
+                logger.debug('Score larger than 1: %.30f' % score)
                 score = 1.0
 
             if score > threshold:
@@ -280,10 +283,10 @@ def hac(tf_dict, idf_dict, heap, vectors, score_pair, reverse_score_pair,
                 score = cosine_similarity(d1, merged_vector)
 
                 if k != merge_id:
-                    print "k != merge_id", k, merge_id, merge_id - offset
+                    logger.error("%d (k) != %d (merge_id)" % (k, merge_id))
 
                 if score > 1.0:
-                    print 'Score bigger than 1: %.30f' % score
+                    logger.debug('Score bigger than 1: %.30f' % score)
                     score = 1.0
 
                 if score > threshold:
@@ -335,7 +338,7 @@ def clustering():
     limit = len(all_docs)  # 600
     threshold = 0.35    # 0.421
 
-    print 'Posts splitting started'
+    logger.debug('Posts splitting started')
     t1 = millis()
     idx = 0
     for (post_id, post_text) in all_docs[:limit]:
@@ -356,9 +359,9 @@ def clustering():
         #       "Post id: ", post_id, \
         #       " : ", " ".join(post_words)
         idx += 1
-    print len(all_docs_splitted), 'posts splitted in ', (t2 - t1), ' ms'
+    logger.debug("%d posts splitted in %d ms" % (len(all_docs_splitted), (t2 - t1)))
 
-    print 'tf-idf started'
+    logger.info('tf-idf started')
     t1 = millis()
     tf_dict = {}
     idf_dict = {}
@@ -373,7 +376,7 @@ def clustering():
             doc_id += offset
 
         if tf_dict.get(doc_id, -1) != -1:
-            print "ERROR, not empty initial"
+            logger.error("ERROR, not empty initial")
 
         tf_dict[doc_id] = {}
         for term in doc_words:
@@ -381,27 +384,27 @@ def clustering():
             idf_dict[term] = idf_dict.get(term, set([]))
             idf_dict[term].add(doc_id)
     t2 = millis()
-    print "tf-idf dictionaries created in %d ms" % (t2 - t1)
+    logger.debug("tf-idf dictionaries created in %d ms" % (t2 - t1))
 
     for i in range(len(recent_docs_splitted)):
         ret = tf_idf(tf_dict, idf_dict, i + offset, recent_docs_splitted[i], all_docs_splitted)
         vectors.append(ret)
         vector_to_post_id[len(vectors) - 1] = docs_to_post_id[i]
     t2 = millis()
-    print 'tf-idf finished in %d ms (with dict creation included)' % (t2 - t1)
+    logger.info('tf-idf finished in %d ms (with dict creation included)' % (t2 - t1))
 
-    print 'Initial heap filling started'
+    logger.debug('Initial heap filling started')
     t1 = millis()
     init_fill_heap(vectors, score_pair, reverse_score_pair, heap, threshold)
     t2 = millis()
-    print 'Heap initially filled in %d ms' % (t2 - t1)
+    logger.debug('Heap initially filled in %d ms' % (t2 - t1))
 
-    print 'HAC started'
+    logger.info('HAC started')
     t1 = millis()
     result = hac(tf_dict, idf_dict, heap, vectors, score_pair, reverse_score_pair,
                  all_docs_splitted, recent_docs_splitted, vector_to_post_id, threshold, offset)
     t2 = millis()
-    print 'HAC finished in %d ms' % (t2 - t1)
+    logger.info('HAC finished in %d ms' % (t2 - t1))
 
     # Creating a cluster-id -> [posts] dictionary
     eliminated = set([])
@@ -416,7 +419,7 @@ def clustering():
             final_dict[key] = post_ids
         # print key, ' ', result[key]
 
-    print 'Inserting clusters into database'
+    logger.info('Inserting clusters into database')
     t1 = millis()
     last_id = -1
     result = {}
@@ -445,7 +448,7 @@ def clustering():
             if post_row.pubdate is not None:
                 post_date = post_row.pubdate.timetuple()
             else:
-                print "Datetime error occurred on post: ", post_id
+                logger.error("Datetime error occurred on post: %d" % post_id)
                 post_date = time.localtime()
 
             post_epoch = time.mktime(post_date)
@@ -466,7 +469,7 @@ def clustering():
                 cluster_category = category
 
         if cluster_category == -1:  # DEBUG purpose
-            print "ERROR: Cluster has no category or posts"
+            logger.error("ERROR: Cluster has no category or posts")
 
         # This gives the difference in seconds, a pretty big number.
         # Divided by 3600 to get hours, because 2 hours = 7200 seconds
@@ -500,21 +503,21 @@ def clustering():
         if last_id == -1:   # Get next cluster_ids with one select
             last_id = db().select(db.cluster.ALL).last().id
 
-        print last_id, ' : ',
         # Update cluster id
+        log_arr = []
         for post_id in cluster_posts:
             db(db.posts.id == post_id).update(cluster=last_id)
-            print post_id,
-        print
+            log_arr.append(post_id)
+        logger.debug("%d : %s" % (last_id, log_arr))
 
         result[last_id] = (cluster_score, master_id, cluster_category, cluster_posts)
         last_id += 1
 
     t2 = millis()
-    print 'Inserting clusters finished in %d ms' % (t2 - t1)
+    logger.info('Inserting clusters finished in %d ms' % (t2 - t1))
 
     tc2 = millis()
-    print 'Total clustering time: %d ms' % (tc2 - tc1)
+    logger.info('Total clustering time: %d ms' % (tc2 - tc1))
 
     # Return only the newly formed clusters, FOR DEBUG PURPOSES
     # x[1] is the value, x[1][0] is the first element of the value: cluster_score
