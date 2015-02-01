@@ -64,20 +64,19 @@ class RSSPost(object):
         return self.item_content[0:min(len(self.item_content), 251)] + '...'
 
     def db_insert(self):
-        # rows = db(db.posts.link == self.page_url).select(db.posts.id)
-        # if len(rows) == 0:
-            # print(self.link)
-        db.posts.insert(link=self.page_url,
-                        cluster=None,
-                        category=self.category,
-                        source=self.source,
-                        title=self.item_title,
-                        text=self.item_filtered_content,
-                        description=self.item_description,
-                        imageurl=self.item_image_url,
-                        pubdate=self.pub_date)
-        return True
-        # return False
+        new_id = db.posts.update_or_insert(
+            db.posts.link == self.page_url,
+            link=self.page_url,
+            cluster=None,
+            category=self.category,
+            source=self.source,
+            title=self.item_title,
+            text=self.item_filtered_content,
+            description=self.item_description,
+            imageurl=self.item_image_url,
+            pubdate=self.pub_date
+        )
+        return False if new_id is None else True
 
     @staticmethod
     def get_post(post_id):

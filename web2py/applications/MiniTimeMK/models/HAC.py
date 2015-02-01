@@ -158,6 +158,7 @@ def init_fill_heap(vectors, score_pair, reverse_score_pair, heap, threshold):
             score = cosine_similarity(d1, d2)
 
             if score > 1.0:
+                print 'Score larger than 1: %.30f' % score
                 score = 1.0
 
             if score > threshold:
@@ -282,7 +283,7 @@ def hac(tf_dict, idf_dict, heap, vectors, score_pair, reverse_score_pair,
                     print "k != merge_id", k, merge_id, merge_id - offset
 
                 if score > 1.0:
-                    print 'Score bigger than 1: %f' % score
+                    print 'Score bigger than 1: %.30f' % score
                     score = 1.0
 
                 if score > threshold:
@@ -332,7 +333,7 @@ def clustering():
     docs_to_post_id = {}    # A helper dictionary for mapping between relative all_docs_splitted indexes and post_id
 
     limit = len(all_docs)  # 600
-    threshold = 0.421
+    threshold = 0.35    # 0.421
 
     print 'Posts splitting started'
     t1 = millis()
