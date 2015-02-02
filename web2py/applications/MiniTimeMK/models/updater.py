@@ -204,7 +204,7 @@ def create_static_page(page_name, pages_url, categories, cluster_entries, post_e
       background-color: #aaa;
     }
     </style>
-    <script src="http://code.jquery.com/jquery-1.11.2.min.js"></script>
+    <script src=""" + URL('MiniTimeMK', 'static', 'js/jquery.js') + """></script>
     <script>
         $(document).ready(function(){
             $('.more').click(function () {
@@ -588,6 +588,8 @@ def rss_extract_items(feeds_list):
             threads[i+j].start()
         for j in range(min(f_limit, len(threads) - i)):
             threads[i+j].join()
+        logger.info("")
+
     t2 = millis()
     logger.info("Feeds processed in %d ms" % (t2-t1))
 
@@ -617,7 +619,6 @@ def rss_extract_items(feeds_list):
 def update_site():
     t1 = millis()
 
-    # TODO: This should go in scheduler_test
     # Selects zero or more occurrences of any interpunction sign in the set
     interpunction_regex = u'(?:\s|[,."\'`:;!@#$%^&*()_<>/=+„“”–\-\\\|\[\]])' + u'*'
 

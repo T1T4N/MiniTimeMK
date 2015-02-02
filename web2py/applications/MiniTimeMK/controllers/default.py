@@ -76,19 +76,20 @@ def index():
         for cluster in clusters[:cluster_len]:
             temp_cluster = cluster_entries.get(category.id, [])
             temp_cluster.append(cluster.id)
-            cluster_entries[category.id] = temp_cluster
             # print("Cluster: " + str(cluster.id))
 
             posts = db((cluster.id == db.posts.cluster) &
                        (db.posts.source == db.sources.id)).select(db.posts.ALL, db.sources.website, orderby=db.posts.id)
-            for post in posts:
-                temp_posts = post_entries.get(cluster.id, [])
-                time_ago = "пред " + time_between(str(time.strftime("%Y-%m-%d %H:%M:%S")), str(post.posts.pubdate))
-                temp_posts.append([post.posts.id, post.posts.title, post.posts.imageurl,
-                                  post.posts.description, post.posts.link, time_ago, post.sources.website])
-                post_entries[cluster.id] = temp_posts
-                # print ("Post: " + str(post.posts.id))
-            # print
+            if len(posts) > 0:
+                cluster_entries[category.id] = temp_cluster
+                for post in posts:
+                    temp_posts = post_entries.get(cluster.id, [])
+                    time_ago = "пред " + time_between(str(time.strftime("%Y-%m-%d %H:%M:%S")), str(post.posts.pubdate))
+                    temp_posts.append([post.posts.id, post.posts.title, post.posts.imageurl,
+                                      post.posts.description, post.posts.link, time_ago, post.sources.website])
+                    post_entries[cluster.id] = temp_posts
+                    # print ("Post: " + str(post.posts.id))
+                # print
         # print
 
     return dict(categoryentries=category_entries,
