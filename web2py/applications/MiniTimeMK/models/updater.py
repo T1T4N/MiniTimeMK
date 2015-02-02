@@ -256,9 +256,11 @@ def create_static_page(page_name, pages_url, categories, cluster_entries, post_e
                                 f.write('<span class="more"> Повеќе поврзани статии» </span>')
                             f.write('<div class="related">')
                         else:
-                            f.write('<a href="' + link + '" target="_blank"><h5>' + title + '</h5></a>')
+                            f.write('<a href="' + link + '" target="_blank"><h5>' + title + ' <span class="time">'
+                                    + website + ' - ' + published + '</span></h5></a>')
                         first = False
                     if len(posts) > 1:
+                        f.write('<a href="/MiniTimeMK/default/cluster?id=' + str(cl) + '">Прикажи ги сите вести од кластерот</a>')
                         f.write('</div>')
                     f.write('</div>')
         f.write('</div>')
@@ -643,4 +645,4 @@ def update_site():
     logger.info('Total update time: %d ms' % (t2 - t1))
 
 from gluon.scheduler import Scheduler
-Scheduler(db, dict(update_task=update_site))
+#Scheduler(db, dict(update_task=update_site))

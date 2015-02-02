@@ -1,0 +1,31 @@
+{{extend 'layout1.html'}}
+<h2>{{=A("Почетна", _href=URL('static', 'index.html'))}}</h2>
+
+    <div class="category">
+	<h3>{{=title}}</h3>
+
+        {{ i = 0}}
+        {{for (postId, title, image, description, link, published, website) in posts:}}
+                {{if i % 3 == 0: }}
+                    <div class="first_in_row">
+                {{else:}}
+                    <div>
+                {{pass}}
+                <article>
+                <a href="{{=link}}" target="_blank"><img src="{{=image}}" /></a>
+                <a href="{{=link}}" target="_blank">
+                    <h4>
+                        <span class="title">{{=title}}</span></br>
+                        <span class="time"> {{=website}} - {{=published}}</span>
+                    </h4>
+                </a>
+                <p>{{=description}}</p>
+                </article>
+                </div>
+                {{if i%3 == 2:}}
+                    <p style="clear: both"></p>
+                {{pass}}
+                {{i+=1}}
+        {{pass}}
+
+</div>
