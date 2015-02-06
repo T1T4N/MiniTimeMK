@@ -362,8 +362,8 @@ def get_html3(pool_manager, entry, feed_options_item, queue):
 
 def parse_mk_month(month):
     """
-    :param month: Number of the month
-    :return: A String representation of the month
+    :param month: String representation of the month
+    :return: Number of the month
     """
     l_month = month.lower()
     if l_month == u'јануари':
