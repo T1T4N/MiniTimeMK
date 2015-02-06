@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-from datetime import datetime
-from time import strftime
-from Queue import Queue
-from pyquery import PyQuery as pq
-from lxml import etree
 import os
 import time
 import speedparser
@@ -12,6 +7,12 @@ import urllib3
 import urllib
 import threading
 import logging
+from datetime import datetime
+from time import strftime
+from Queue import Queue
+from pyquery import PyQuery as pq
+from lxml import etree
+
 logger = logging.getLogger("MiniTimeMK")
 logger.setLevel(logging.DEBUG)
 
@@ -19,6 +20,7 @@ logger.setLevel(logging.DEBUG)
 def days_between(days):
     """
     Converts days to weeks/months/years
+
     :param days: The number of days to convert
     :return: A string representing the difference
     """
@@ -37,6 +39,7 @@ def days_between(days):
 def hours_ago(minutes):
     """
     Converts minutes to hours
+
     :param minutes: The number of minutes to convert
     :return: A string representing the converted hours or minutes
     """
@@ -54,6 +57,7 @@ def hours_ago(minutes):
 def time_between(d1, d2):
     """
     Calculates difference between two dates
+
     :param d1: First date, must be > d2
     :param d2: Second date, must be < d1
     :return: A string representing the time difference
@@ -72,6 +76,7 @@ def time_between(d1, d2):
 def create_static_page(page_name, pages_url, categories, cluster_entries, post_entries):
     """
     Creates the static html pages from the clusters.
+
     :param page_name: The file name of the html page
     :param pages_url: The URL pointing to the category static pages
     :param categories: The id and names of the categories
@@ -272,10 +277,13 @@ def create_static_page(page_name, pages_url, categories, cluster_entries, post_e
 
 def generate_categories(req_category=None):
     """
-    :param req_category: id for the category for which the clusters and the posts should be generated \
-        if None, then clusters and posts are generated for all categories
-    :return: categories, clusters for the categories, posts for the clusters
+    Generates the clusters and posts for the required category
+    If no category specified, generates for all categories
+
+    :param req_category: The category for which to generate the clusters and posts
+    :return: A tuple of category entries, cluster entries and post entries
     """
+
     all_categories = db().select(db.categories.ALL)
     if req_category is None or not isinstance(req_category, int) \
             or req_category < 0 or req_category > len(all_categories):
@@ -310,9 +318,9 @@ def generate_categories(req_category=None):
 
 def generate_static():
     """
-    Generating a static index.html page and generating static html pages for each category using threads
+    Generates static pages for each category and the index
     """
-    t1 = millis()
+
     categories = db().select(db.categories.ALL)
     category_urls = [URL('static', cat.static_name + '.html') for cat in categories]
 
@@ -322,26 +330,24 @@ def generate_static():
     threads = []
     for i, category in enumerate(categories):
         category_entries, cluster_entries, post_entries = generate_categories(int(category.id))
-        threads.append(threading.Thread(target=create_static_page,
-                                        args=(category.static_name, category_urls,
-                                              category_entries, cluster_entries, post_entries)))
+        threads.append(
+            threading.Thread(target=create_static_page,
+                             args=(category.static_name, category_urls,
+                                   category_entries, cluster_entries, post_entries))
+        )
 
-    for t in threads:
+    for t in threads:   # Fire all threads
         t.start()
-    for t in threads:
+    for t in threads:   # Wait for all threads to finish
         t.join()
-
-    t2 = millis()
-    logger.info('Generating static pages: %d ms' % (t2 - t1))
 
 
 def get_html3(pool_manager, entry, feed_options_item, queue):
     """
     Extracts the html of the page specified with url and puts it in a queue.
     Intended for parallelized usage.
-    :param pool_manager: Pool manager is used for storing open connections, for faster get requests
+
     :param entry: The RSS Feed entry
-    :param feed_options_item: Item containing info about getting the content from a news post
     :param queue: The queue where to store the result
     """
 
@@ -349,22 +355,29 @@ def get_html3(pool_manager, entry, feed_options_item, queue):
         l = entry.link.encode("utf-8")
         # Bug fix: HTTPConnectionPool uses urls relative to the host
         m = l[l.find('/', 8):]  # Find first occurrence of / after http:// part
-        r = pool_manager.request('GET', m, retries=False)
+        r = pool_manager.request('GET', m, timeout=5, retries=False)
 
         queue.put((entry, "".join(r.data), feed_options_item))
     except urllib3.exceptions.MaxRetryError as e:
-        logger.error("MaxRetryError: %s" % e)
+        logger.warning("MaxRetryError: %s" % e)
+    except urllib3.exceptions.ReadTimeoutError as e:
+        logger.warning("ReadTimeoutError: %s" % e)
+    except urllib3.exceptions.ConnectTimeoutError as e:
+        logger.warning("ConnectTimeoutError: %s" % e)
+    except urllib3.exceptions.ProtocolError as e:
+        logger.warning("ProtocolError: %s" % e)
     except IOError as e:
-        logger.error("IOError: %s" % e)
+        logger.warning("IOError: %s" % e)
     except RuntimeError as e:
-        logger.error("RuntimeError:" % e)
+        logger.warning("RuntimeError:" % e)
 
 
 def parse_mk_month(month):
     """
-    :param month: String representation of the month
-    :return: Number of the month
+    :param month: The month name given in cyrillic
+    :return: A unicode string of the numeric representation of the month
     """
+
     l_month = month.lower()
     if l_month == u'јануари':
         return u'01'
@@ -396,12 +409,13 @@ def parse_mk_month(month):
 
 def parse_rss_post(entry, html, feed_options_item):
     """
-    Parsing the news article to a desired structure
-    :param entry: The RSS feed entry
-    :param html: The HTML of the page containing the news article
-    :param feed_options_item: Item containing info about extracting content from a particular news article
-    :return: The post as a RSSPost structure, containing the link to the post, content, image url etc.
+    Parses a rss post into a structure
+    :param entry: An entry from a SpeedParser parsed RSS feed
+    :param html: A string of the html code of the entry
+    :param feed_options_item: The feed options
+    :return: A parsed RSSPost structure
     """
+
     try:
         soup = pq(etree.HTML(html))
 
@@ -415,10 +429,8 @@ def parse_rss_post(entry, html, feed_options_item):
         item_link = entry.link
         if 'feedproxy.google' in item_link:     # FeedProxy workaround
             item_link = entry.get("id", item_link)      # SpeedParser specific
-            # item_link = entry.get("feedburner_origlink", item_link)
 
-        # SpeedParser changes: uses "updated" instead of "published"
-        item_pub_date = entry.get("updated", default_date)   # default
+        item_pub_date = entry.get("updated", default_date)
         if item_pub_date != default_date:
             if entry.updated_parsed is None or entry.updated_parsed == "":
                 item_pub_date = default_date
@@ -426,7 +438,7 @@ def parse_rss_post(entry, html, feed_options_item):
                 # TODO: timezone adjustment
                 item_pub_date = strftime("%Y-%m-%d %H:%M:%S", entry.updated_parsed)
 
-        # Bug fix: Workaround for Kanal5 missing publish date
+        # Bug fix: workaround for Kanal5 missing publish date
         if feed_options_item.source_id == 1:
             pattern = re.compile(
                 u'(\d+)\s+([A-Za-zАБВГДЃЕЖЗЅИЈКЛЉМНЊОПРСТЌУФХЦЧЏШабвгдѓежзѕијклљмнњопрстќуфхцчџш]+)\s+(\d+)\s+во (\d+):(\d+)'
@@ -480,9 +492,11 @@ def parse_rss_post(entry, html, feed_options_item):
                         item_text = item_text.encode('iso-8859-1', errors='ignore')
                     else:
                         item_text = item_text.encode(soup.encoding, errors='ignore')
+
                 else:
                     item_text = item_text.encode(default_encoding, errors='ignore')
 
+                # Gives us a unicode string
                 item_text = item_text.decode(default_encoding, errors='ignore')
 
         if feed_options_item.image_from_rss:
@@ -492,9 +506,7 @@ def parse_rss_post(entry, html, feed_options_item):
             if len(image_entries) > 0:  # May not contain image
                 image_url = pq(image_entries[0]).attr("src")
 
-        """
-        Regex cleaning here
-        """
+        # Regex cleaning
         item_filtered_text = item_text.lower()
         for (regex_expr, output_fmt) in feed_options_item.clean_regex:
             item_filtered_text = re.sub(regex_expr, output_fmt, item_filtered_text)
@@ -510,46 +522,51 @@ def parse_rss_post(entry, html, feed_options_item):
                            item_image_url=image_url)
         return rss_post
     except etree.XMLSyntaxError as e:
-        logger.error("HTML parse error %s %s" % (entry.link, e))
+        logger.warning("HTML parse error %s %s" % (entry.link, e))
         return None
 
 
 def parse_feed_parallel(num, feed_options_item, all_links, queue, t_limit=None):
     """
     Parallel creation of a RSSItem for each post in the feed.
+
     :param num: The feed's number in the list. For DEBUG purposes
     :param feed_options_item: The RSS Feed options
     :param all_links: A set of all the links in the database
     :param queue: A Queue to store the resulting RSSPost objects
     :param t_limit: An integer used to limit the number of running threads
     """
+
     t1 = millis()
 
     # Read the feed XML and store it as a string
-    a = urllib.urlopen(feed_options_item.feed_url).read()
+    try:
+        a = urllib.urlopen(feed_options_item.feed_url).read()
+    except IOError as e:
+        logger.error("Getting XML for feed %s failed. No posts from this feed will be processed"
+                     % feed_options_item.feed_url)
+        return
+
     d = speedparser.parse(a, clean_html=False)  # SpeedParser is ~10 times faster than FeedParser
-    # d = feedparser.parse(feed_options_item.feed_url)
 
     t2 = millis()
-    logger.debug("%d %s with %d posts, speedparser done in: %d ms" % (num, feed_options_item.feed_url, len(d.entries), (t2-t1)))
+    logger.debug("%d %s with %d posts, SpeedParser done in: %d ms" %
+                 (num, feed_options_item.feed_url, len(d.entries), (t2-t1)))
 
     # Create a thread for each entry in the feed which is not present in the database
     threads = []
-
     http = None
     if 'feedburner' in feed_options_item.feed_url:
-        # Got maxsize=40 experimentally as best value
-        # PoolManager automatically handles different hosts
-        # There is a bug with a1on that reports incorrect host
+        # Get the host of the first original link
         http = urllib3.connection_from_url(d.entries[0].get("id", d.entries[0].link), maxsize=40, block=True)
     else:
+        # Got maxsize=40 experimentally as best value
         http = urllib3.connection_from_url(feed_options_item.feed_url, maxsize=40, block=True)
 
-    # Filling thread list
+    # Fill threads list
     for entry in d.entries:
         if 'feedproxy.google' in entry.link:    # FeedProxy workaround
-            # if entry.get("feedburner_origlink", entry.link) not in all_links:
-            if entry.get("id", entry.link) not in all_links:    # SpeedParser changes
+            if entry.get("id", entry.link) not in all_links:
                 threads.append(threading.Thread(target=get_html3, args=(http, entry, feed_options_item, queue)))
         else:
             if entry.link not in all_links:
@@ -563,8 +580,8 @@ def parse_feed_parallel(num, feed_options_item, all_links, queue, t_limit=None):
             for j in range(min(t_limit, len(threads) - i)):
                 threads[i+j].join()
 
+    # If t_limit is None, run all threads at once
     else:
-        # If t_limit is None, run all post threads at once
         for t in threads:
             t.start()
         for t in threads:
@@ -576,6 +593,7 @@ def rss_extract_items(feeds_list):
     Extracts the text from each RSS entry in each RSS feed in feeds_array
     and performs cleaning of interpunction signs and other HTML tags
     Feeds array should consists of RSSFeedOptions items.
+
     :param feeds_list: A list of RSSFeedOptions items
     """
     all_dbrow_links = db().select(db.posts.link)    # List of Row objects containing the links
@@ -598,7 +616,7 @@ def rss_extract_items(feeds_list):
             threads[i+j].start()
         for j in range(min(f_limit, len(threads) - i)):
             threads[i+j].join()
-        logger.info("")
+        logger.debug("")
 
     t2 = millis()
     logger.info("Feeds processed in %d ms" % (t2-t1))
@@ -610,10 +628,8 @@ def rss_extract_items(feeds_list):
     posts = []
     while not items.empty():
         (entry, html, feed_options_item) = items.get_nowait()
-        # post_threads.append(threading.Thread(
-        #     target=parse_rss_post, args=(entry, html, feed_options_item)
-        # ))
         rss_post = parse_rss_post(entry, html, feed_options_item)
+
         if rss_post is not None:
             posts.append(rss_post)
     t2 = millis()
@@ -628,13 +644,10 @@ def rss_extract_items(feeds_list):
 
 def update_site():
     """
-    Master function for updating the data
-    Calls a function for extracting new posts
-    Calls a function for clustering the recent news articles
-    Calls a function for generating static html pages to be shown to the users
+    Main update function which extracts new posts and creates clusters
     """
-    t1 = millis()
 
+    t1 = millis()
     # Selects zero or more occurrences of any interpunction sign in the set
     interpunction_regex = u'(?:\s|[,."\'`:;!@#$%^&*()_<>/=+„“”–\-\\\|\[\]])' + u'*'
 
@@ -653,13 +666,16 @@ def update_site():
                                     category=row.rssfeeds.category,
                                     recode=row.rssfeeds.recode,
                                     clean_regex=words_extraction_regex))
-
     rss_extract_items(feeds)
     new_clusters = clustering()
+
+    tg1 = millis()
     generate_static()
+    tg2 = millis()
+    logger.info('Generating static pages: %d ms' % (tg2 - tg1))
 
     t2 = millis()
     logger.info('Total update time: %d ms' % (t2 - t1))
 
 from gluon.scheduler import Scheduler
-#Scheduler(db, dict(update_task=update_site))
+Scheduler(db, dict(update_task=update_site))
