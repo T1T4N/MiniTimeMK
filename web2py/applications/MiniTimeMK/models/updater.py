@@ -19,7 +19,6 @@ logger.setLevel(logging.DEBUG)
 def days_between(days):
     """
     Converts days to weeks/months/years
-
     :param days: The number of days to convert
     :return: A string representing the difference
     """
@@ -38,7 +37,6 @@ def days_between(days):
 def hours_ago(minutes):
     """
     Converts minutes to hours
-
     :param minutes: The number of minutes to convert
     :return: A string representing the converted hours or minutes
     """
@@ -56,7 +54,6 @@ def hours_ago(minutes):
 def time_between(d1, d2):
     """
     Calculates difference between two dates
-
     :param d1: First date, must be > d2
     :param d2: Second date, must be < d1
     :return: A string representing the time difference
@@ -75,7 +72,6 @@ def time_between(d1, d2):
 def create_static_page(page_name, pages_url, categories, cluster_entries, post_entries):
     """
     Creates the static html pages from the clusters.
-
     :param page_name: The file name of the html page
     :param pages_url: The URL pointing to the category static pages
     :param categories: The id and names of the categories
@@ -204,7 +200,7 @@ def create_static_page(page_name, pages_url, categories, cluster_entries, post_e
       background-color: #aaa;
     }
     </style>
-    <script src="http://code.jquery.com/jquery-1.11.2.min.js"></script>
+    <script src=""" + URL('MiniTimeMK', 'static', 'js/jquery.js') + """></script>
     <script>
         $(document).ready(function(){
             $('.more').click(function () {
@@ -256,9 +252,11 @@ def create_static_page(page_name, pages_url, categories, cluster_entries, post_e
                                 f.write('<span class="more"> Повеќе поврзани статии» </span>')
                             f.write('<div class="related">')
                         else:
-                            f.write('<a href="' + link + '" target="_blank"><h5>' + title + '</h5></a>')
+                            f.write('<a href="' + link + '" target="_blank"><h5>' + title + ' <span class="time">'
+                                    + website + ' - ' + published + '</span></h5></a>')
                         first = False
                     if len(posts) > 1:
+                        f.write('<a href="/MiniTimeMK/default/cluster?id=' + str(cl) + '">Прикажи ги сите вести од кластерот</a>')
                         f.write('</div>')
                     f.write('</div>')
         f.write('</div>')
@@ -273,6 +271,11 @@ def create_static_page(page_name, pages_url, categories, cluster_entries, post_e
 
 
 def generate_categories(req_category=None):
+    """
+    :param req_category: id for the category for which the clusters and the posts should be generated \
+        if None, then clusters and posts are generated for all categories
+    :return: categories, clusters for the categories, posts for the clusters
+    """
     all_categories = db().select(db.categories.ALL)
     if req_category is None or not isinstance(req_category, int) \
             or req_category < 0 or req_category > len(all_categories):
@@ -306,6 +309,9 @@ def generate_categories(req_category=None):
 
 
 def generate_static():
+    """
+    Generating a static index.html page and generating static html pages for each category using threads
+    """
     t1 = millis()
     categories = db().select(db.categories.ALL)
     category_urls = [URL('static', cat.static_name + '.html') for cat in categories]
@@ -333,8 +339,9 @@ def get_html3(pool_manager, entry, feed_options_item, queue):
     """
     Extracts the html of the page specified with url and puts it in a queue.
     Intended for parallelized usage.
-
+    :param pool_manager: Pool manager is used for storing open connections, for faster get requests
     :param entry: The RSS Feed entry
+    :param feed_options_item: Item containing info about getting the content from a news post
     :param queue: The queue where to store the result
     """
 
@@ -355,8 +362,8 @@ def get_html3(pool_manager, entry, feed_options_item, queue):
 
 def parse_mk_month(month):
     """
-    :param month:
-    :return:
+    :param month: Number of the month
+    :return: A String representation of the month
     """
     l_month = month.lower()
     if l_month == u'јануари':
@@ -388,6 +395,13 @@ def parse_mk_month(month):
 
 
 def parse_rss_post(entry, html, feed_options_item):
+    """
+    Parsing the news article to a desired structure
+    :param entry: The RSS feed entry
+    :param html: The HTML of the page containing the news article
+    :param feed_options_item: Item containing info about extracting content from a particular news article
+    :return: The post as a RSSPost structure, containing the link to the post, content, image url etc.
+    """
     try:
         soup = pq(etree.HTML(html))
 
@@ -503,7 +517,6 @@ def parse_rss_post(entry, html, feed_options_item):
 def parse_feed_parallel(num, feed_options_item, all_links, queue, t_limit=None):
     """
     Parallel creation of a RSSItem for each post in the feed.
-
     :param num: The feed's number in the list. For DEBUG purposes
     :param feed_options_item: The RSS Feed options
     :param all_links: A set of all the links in the database
@@ -563,7 +576,6 @@ def rss_extract_items(feeds_list):
     Extracts the text from each RSS entry in each RSS feed in feeds_array
     and performs cleaning of interpunction signs and other HTML tags
     Feeds array should consists of RSSFeedOptions items.
-
     :param feeds_list: A list of RSSFeedOptions items
     """
     all_dbrow_links = db().select(db.posts.link)    # List of Row objects containing the links
@@ -586,6 +598,8 @@ def rss_extract_items(feeds_list):
             threads[i+j].start()
         for j in range(min(f_limit, len(threads) - i)):
             threads[i+j].join()
+        logger.info("")
+
     t2 = millis()
     logger.info("Feeds processed in %d ms" % (t2-t1))
 
@@ -613,9 +627,14 @@ def rss_extract_items(feeds_list):
 
 
 def update_site():
+    """
+    Master function for updating the data
+    Calls a function for extracting new posts
+    Calls a function for clustering the recent news articles
+    Calls a function for generating static html pages to be shown to the users
+    """
     t1 = millis()
 
-    # TODO: This should go in scheduler_test
     # Selects zero or more occurrences of any interpunction sign in the set
     interpunction_regex = u'(?:\s|[,."\'`:;!@#$%^&*()_<>/=+„“”–\-\\\|\[\]])' + u'*'
 
@@ -643,4 +662,4 @@ def update_site():
     logger.info('Total update time: %d ms' % (t2 - t1))
 
 from gluon.scheduler import Scheduler
-Scheduler(db, dict(update_task=update_site))
+#Scheduler(db, dict(update_task=update_site))

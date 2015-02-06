@@ -14,7 +14,6 @@ def update():
     """
     example action using the internationalization operator T and flash
     rendered by views/default/index.html or views/generic.html
-
     if you need a simple wiki simply replace the two lines below with:
     return auth.wiki()
     Fetches new posts, updates the database, performs clustering and generates static pages
@@ -24,6 +23,29 @@ def update():
     redirect('index')
     return dict()
 
+
+def cluster():
+    req_cluster = request.vars.get('id', None)
+    try:
+        if req_cluster is not None:
+            req_cluster = int(req_cluster)
+    except ValueError:
+        redirect('index')
+
+    all_posts = db((db.posts.cluster == req_cluster) & (db.posts.source == db.sources.id)).select(db.posts.ALL, db.sources.website, orderby=~db.posts.pubdate)
+    post_entries = []
+    title = ""
+    first = True
+    for post in all_posts:
+        if first:
+            first = False
+            title = post.posts.title
+        time_ago = "пред " + time_between(str(time.strftime("%Y-%m-%d %H:%M:%S")), str(post.posts.pubdate))
+        post_entries.append([post.posts.id, post.posts.title, post.posts.imageurl,
+                                  post.posts.description, post.posts.link, time_ago, post.sources.website])
+    return dict(title=title,
+                posts=post_entries
+                )
 
 def index():
     req_category = request.vars.get('cat_id', None)
@@ -53,19 +75,20 @@ def index():
         for cluster in clusters[:cluster_len]:
             temp_cluster = cluster_entries.get(category.id, [])
             temp_cluster.append(cluster.id)
-            cluster_entries[category.id] = temp_cluster
             # print("Cluster: " + str(cluster.id))
 
             posts = db((cluster.id == db.posts.cluster) &
                        (db.posts.source == db.sources.id)).select(db.posts.ALL, db.sources.website, orderby=db.posts.id)
-            for post in posts:
-                temp_posts = post_entries.get(cluster.id, [])
-                time_ago = "пред " + time_between(str(time.strftime("%Y-%m-%d %H:%M:%S")), str(post.posts.pubdate))
-                temp_posts.append([post.posts.id, post.posts.title, post.posts.imageurl,
-                                  post.posts.description, post.posts.link, time_ago, post.sources.website])
-                post_entries[cluster.id] = temp_posts
-                # print ("Post: " + str(post.posts.id))
-            # print
+            if len(posts) > 0:
+                cluster_entries[category.id] = temp_cluster
+                for post in posts:
+                    temp_posts = post_entries.get(cluster.id, [])
+                    time_ago = "пред " + time_between(str(time.strftime("%Y-%m-%d %H:%M:%S")), str(post.posts.pubdate))
+                    temp_posts.append([post.posts.id, post.posts.title, post.posts.imageurl,
+                                      post.posts.description, post.posts.link, time_ago, post.sources.website])
+                    post_entries[cluster.id] = temp_posts
+                    # print ("Post: " + str(post.posts.id))
+                # print
         # print
 
     return dict(categoryentries=category_entries,
