@@ -13,7 +13,7 @@ The application was developed by:
 * [Daniel Stojkov](https://github.com/DanielStojkov)
 
 Under the mentorship of:
-* [Dr. Igor Trajkovski](http://www.time.mk/trajkovski)
+* [Dr. Igor Trajkovski](http://www.time.mk/trajkovski/)
 * [Dr. Katerina Zdravkova](http://www.finki.ukim.mk/en/staff/katerina-zdravkova)
 
 ### Benchmark
